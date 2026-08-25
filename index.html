@@ -280,7 +280,6 @@
         <span class="k touch-only">누른 채 드래그</span><span class="d touch-only">좌우 가속 · 위로 줄 감기 · 아래로 다이브</span>
         <span class="k touch-only">◀ ▶ 버튼</span><span class="d touch-only">걷기 · 공중 방향 조절 (좌측 하단)</span>
         <span class="k desktop-only">우클릭 / E</span><span class="d desktop-only">웹 집 — 조준 방향으로 대시</span>
-        <span class="k touch-only">두 번째 손가락 탭</span><span class="d touch-only">웹 집 — 전방 대시</span>
         <span class="k desktop-only">S (공중)</span><span class="d desktop-only">다이브로 낙하 가속</span>
         <span class="k desktop-only">Space</span><span class="d desktop-only">지붕에서 점프 · 줄 놓기</span>
         <span class="k touch-only">🕸 버튼</span><span class="d touch-only">가까운 악당 자동 사격 — XP·토큰 드랍!</span>
@@ -611,9 +610,8 @@ canvas.addEventListener('pointerdown', e => {
   if (!playing()) return;
   if (e.pointerType === 'touch'){
     // 터치는 무조건 스윙 — 사격은 🕸 버튼 전용 (탭 하이재킹 방지)
-    // 모바일: 실제로 스윙 중일 때만 두 번째 손가락 = 웹 집
+    // 스윙 중 추가 터치는 무시: 연타·손가락 겹침 시 의도치 않은 전방 대시 방지
     if (player.attached && activePointer !== null && e.pointerId !== activePointer){
-      tryZip(false);
       return;
     }
     // 그 외의 모든 터치는 이 터치를 주 터치로 삼아 무조건 자동 스윙
