@@ -257,6 +257,7 @@
         <span class="k touch-only">두 번째 손가락 탭</span><span class="d touch-only">웹 집 — 전방 대시</span>
         <span class="k desktop-only">S (공중)</span><span class="d desktop-only">다이브로 낙하 가속</span>
         <span class="k desktop-only">Space</span><span class="d desktop-only">지붕에서 점프 · 줄 놓기</span>
+        <span class="k">악당 탭·클릭</span><span class="d">거미줄 사격 처치 — XP·토큰 드랍!</span>
         <span class="k">스타일</span><span class="d">니어미스·에어타임·격추로 콤보 XP!</span>
         <span class="k">목표</span><span class="d">바닥에 떨어지지 말고 최대한 멀리!</span>
       </div>
@@ -495,6 +496,8 @@ const player = {
 let buildings = [];   // {x, w, top, seed}
 let coins = [];       // {x, y, t, taken, tt}
 let thugs = [];       // {bx, range, y, t, state, x, vx, vy, rot, dir}
+let webShots = [];    // {x, y, vx, vy, life, target}
+let shotCd = 0;
 let particles = [];
 let floaters = [];    // {x, y, t, text, color}
 let trail = [];
@@ -527,6 +530,15 @@ canvas.addEventListener('pointerdown', e => {
   ensureAudio();
   if (e.pointerType === 'mouse') mouseButtons = e.buttons;
   if (!playing()) return;
+  // 악당을 직접 노렸으면 거미줄 사격이 최우선 (스윙 중 두 번째 손가락 포함)
+  {
+    const wp = screenToWorld(e.clientX, e.clientY);
+    const tgt = thugAtPoint(wp.x, wp.y, e.pointerType === 'touch' ? 90 : 60);
+    if (tgt && shotCd <= 0 && e.button !== 2){
+      fireWebShot(tgt);
+      return;
+    }
+  }
   if (e.pointerType === 'touch'){
     // 모바일: 실제로 스윙 중일 때만 두 번째 손가락 = 웹 집
     if (player.attached && activePointer !== null && e.pointerId !== activePointer){
@@ -817,6 +829,49 @@ function tryZip(useAim){
   webPuff(p.x + dx * 40, p.y + dy * 40);
 }
 
+// ---------- 거미줄 사격 ----------
+const thugPos = t => ({ x: t.bx + Math.sin(t.t) * t.range, y: t.y - 22 });
+function thugAtPoint(wx, wy, r){
+  let best = null, bd = r * r;
+  for (const t of thugs){
+    if (t.state !== 'idle') continue;
+    const tp = thugPos(t);
+    const dx = tp.x - wx, dy = tp.y - wy;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bd){ bd = d2; best = t; }
+  }
+  return best;
+}
+function fireWebShot(target){
+  const p = player;
+  if (p.dead || shotCd > 0) return;
+  shotCd = 0.25;
+  const tp = thugPos(target);
+  const dx = tp.x - p.x, dy = tp.y - (p.y - 10);
+  const d = Math.hypot(dx, dy) || 1;
+  const sp = 1900;
+  webShots.push({ x: p.x, y: p.y - 10, vx: dx / d * sp, vy: dy / d * sp, life: 1.2, target });
+  sfx.shoot();
+}
+function koThug(t, impactVx, label){
+  if (t.state !== 'idle') return;
+  const tp = thugPos(t);
+  t.state = 'hit';
+  t.x = tp.x;
+  t.vx = (impactVx >= 0 ? 1 : -1) * (260 + Math.abs(impactVx) * 0.4);
+  t.vy = -460;
+  koCount++;
+  addXP(XP_KO, label, tp.x, t.y - 60, 'r');
+  bumpCombo();
+  sfx.hit();
+  hitBurst(tp.x, t.y - 24);
+  shake = Math.max(shake, 5);
+  // 처치 보상: 토큰 드랍 (자석으로 수집)
+  for (let i = 0; i < 2; i++){
+    coins.push({ x: tp.x - 34 + i * 68, y: t.y - 80 - (i % 2) * 42, t: Math.random() * 6.28, taken: false, tt: 0 });
+  }
+}
+
 // ---------- XP / 콤보 ----------
 function comboMult(){ return 1 + Math.min(combo, 20) * 0.1; }
 function addXP(base, label, x, y, kind){
@@ -848,6 +903,7 @@ function renderCombo(){
 function resetWorld(){
   wrand = mulberry32((Math.random() * 1e9) >>> 0);
   buildings = []; coins = []; thugs = []; particles = []; floaters = []; trail = []; zipFx = [];
+  webShots = []; shotCd = 0;
   buildings.push({ x: -260, w: 520, top: 620, seed: 7 });
   genX = 260;
   const p = player;
@@ -874,15 +930,32 @@ function genAhead(){
     const b = { x: genX + gap, w, top, seed: (wrand() * 1e9) >>> 0 };
     buildings.push(b);
 
-    // 토큰: 틈새 아치
+    // 토큰: 틈새 아치 (지붕보다 넉넉히 높게)
     if (gap > 110 && wrand() < 0.85){
       const x0 = prev.x + prev.w, x1 = b.x;
-      const lift = rand(110, 230);
+      const lift = rand(170, 330);
       const n = 5;
       for (let i = 0; i < n; i++){
         const t = (i + 0.5) / n;
         const py = lerp(prev.top - 40, b.top - 40, t) - Math.sin(t * Math.PI) * lift;
         coins.push({ x: lerp(x0, x1, t), y: py, t: wrand() * 6.28, taken: false, tt: 0 });
+      }
+    }
+    // 토큰: 하늘 스윙 궤적 체인 (건물과 무관한 공중 수집)
+    if (wrand() < 0.55){
+      const n = 4 + Math.floor(wrand() * 3);
+      const baseY = 40 + wrand() * 280;          // 스카이라인 위 하늘 밴드
+      const spanW = 260 + wrand() * 180;
+      const x0 = b.x - gap * 0.5 - spanW * 0.5;
+      const amp = 30 + wrand() * 55;
+      const phase = wrand() * 6.28;
+      for (let i = 0; i < n; i++){
+        const t = n > 1 ? i / (n - 1) : 0.5;
+        coins.push({
+          x: x0 + t * spanW,
+          y: baseY + Math.sin(phase + t * Math.PI) * amp,
+          t: wrand() * 6.28, taken: false, tt: 0,
+        });
       }
     }
     // 토큰: 지붕 위 라인
@@ -894,11 +967,12 @@ function genAhead(){
     }
     // 토큰: 높은 공중 보너스
     if (wrand() < 0.25){
-      coins.push({ x: b.x + b.w * 0.5, y: b.top - rand(260, 380), t: wrand() * 6.28, taken: false, tt: 0 });
+      coins.push({ x: b.x + b.w * 0.5, y: b.top - rand(300, 480), t: wrand() * 6.28, taken: false, tt: 0 });
     }
-    // 악당
-    if (maxX > 300 && b.w > 170 && wrand() < 0.3 + diff * 0.35){
-      const n2 = wrand() < 0.3 ? 2 : 1;
+    // 악당 (더 자주, 최대 3명)
+    if (maxX > 200 && b.w > 150 && wrand() < 0.5 + diff * 0.3){
+      const r0 = wrand();
+      const n2 = r0 < 0.15 ? 3 : r0 < 0.5 ? 2 : 1;
       for (let i = 0; i < n2; i++){
         const margin = 40;
         const range = Math.min(60, (b.w - margin * 2) / 2 - 10);
@@ -1168,11 +1242,17 @@ function physics(dt){
   while (diffR < -Math.PI) diffR += Math.PI * 2;
   p.rot += diffR * Math.min(1, dt * 10);
 
-  // 토큰
+  // 토큰 (자석: 가까우면 빨려온다)
   for (let i = 0; i < coins.length; i++){
     const c = coins[i];
     if (c.taken) continue;
     const dx = c.x - p.x, dy = c.y - p.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < 140 * 140 && d2 >= PICK_R * PICK_R){
+      const d = Math.sqrt(d2) || 1;
+      const pull = 640 * dt;
+      c.x -= dx / d * pull; c.y -= dy / d * pull;
+    }
     if (dx * dx + dy * dy < PICK_R * PICK_R){
       c.taken = true; c.tt = 0;
       coinCount++;
@@ -1183,25 +1263,38 @@ function physics(dt){
     }
   }
 
-  // 악당
+  // 악당: 몸통 박치기 격추
   for (const t of thugs){
     if (t.state !== 'idle') continue;
-    const tx = t.bx + Math.sin(t.t) * t.range;
-    const dx = tx - p.x, dy = (t.y - 22) - p.y;
-    if (Math.abs(dx) < PW / 2 + 14 && Math.abs(dy) < PH / 2 + 22){
-      if (speed > 500){
-        t.state = 'hit';
-        t.x = tx;
-        t.vx = p.vx * 0.65 + (p.vx >= 0 ? 260 : -260);
-        t.vy = Math.min(p.vy * 0.4, 0) - 460;
-        koCount++;
-        addXP(XP_KO, '격추!', tx, t.y - 60, 'r');
-        bumpCombo();
-        sfx.hit();
-        hitBurst(tx, t.y - 24);
-        shake = Math.max(shake, 5);
-      }
+    const tp = thugPos(t);
+    const dx = tp.x - p.x, dy = tp.y - p.y;
+    if (Math.abs(dx) < PW / 2 + 14 && Math.abs(dy) < PH / 2 + 22 && speed > 500){
+      koThug(t, p.vx, '격추!');
     }
+  }
+
+  // 거미줄 총알: 경량 유도 + 명중 판정
+  shotCd = Math.max(0, shotCd - dt);
+  for (let i = webShots.length - 1; i >= 0; i--){
+    const s = webShots[i];
+    s.life -= dt;
+    const tg = s.target;
+    if (tg && tg.state === 'idle'){
+      const tp = thugPos(tg);
+      const dx = tp.x - s.x, dy = tp.y - s.y;
+      const d = Math.hypot(dx, dy) || 1;
+      if (d < 36){
+        koThug(tg, s.vx, '명중!');
+        webShots.splice(i, 1);
+        continue;
+      }
+      const sp = Math.hypot(s.vx, s.vy);
+      const hom = Math.min(1, 7 * dt);
+      s.vx = s.vx * (1 - hom) + dx / d * sp * hom;
+      s.vy = s.vy * (1 - hom) + dy / d * sp * hom;
+    }
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    if (s.life <= 0 || s.y > STREET_Y + 100) webShots.splice(i, 1);
   }
   for (const t of thugs){
     if (t.state !== 'hit') continue;
@@ -1578,6 +1671,19 @@ function drawWeb(){
   ctx.restore();
 }
 
+function drawWebShots(){
+  for (const s of webShots){
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(s.x - s.vx * 0.035, s.y - s.vy * 0.035);
+    ctx.lineTo(s.x, s.y);
+    ctx.stroke();
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, 6.29); ctx.fill();
+  }
+}
+
 function drawZipFx(){
   for (const z of zipFx){
     const a = 1 - z.t / 0.25;
@@ -1690,6 +1796,7 @@ function render(){
   drawAimPreview();
   drawAutoAimHint();
   drawZipFx();
+  drawWebShots();
   drawWeb();
   drawSpeedLines();
   if (!(player.dead && deathTimer > 0.35)) drawHero();
