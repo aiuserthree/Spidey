@@ -87,12 +87,12 @@
 
   /* 모바일 좌우 이동 버튼 */
   #move-ctl{
-    position:absolute;left:16px;bottom:max(16px,env(safe-area-inset-bottom));
+    position:absolute;right:16px;bottom:max(16px,env(safe-area-inset-bottom));
     display:none;grid-template-columns:repeat(3, auto);gap:10px;pointer-events:auto;
   }
   body.touch #hud.on #move-ctl{display:grid}
   #walk-ctl{
-    position:absolute;right:16px;bottom:max(16px,env(safe-area-inset-bottom));
+    position:absolute;left:16px;bottom:max(16px,env(safe-area-inset-bottom));
     display:none;gap:14px;pointer-events:auto;
   }
   body.touch #hud.on #walk-ctl{display:flex}
@@ -278,7 +278,7 @@
         <span class="k desktop-only">클릭 유지</span><span class="d desktop-only">거미줄을 쏘고, 떼면 놓는다</span>
         <span class="k touch-only">길게 터치</span><span class="d touch-only">자동 조준 스윙 — 떼면 놓는다</span>
         <span class="k touch-only">누른 채 드래그</span><span class="d touch-only">좌우 가속 · 위로 줄 감기 · 아래로 다이브</span>
-        <span class="k touch-only">◀ ▶ 버튼</span><span class="d touch-only">걷기 · 공중 방향 조절 (우측 하단)</span>
+        <span class="k touch-only">◀ ▶ 버튼</span><span class="d touch-only">걷기 · 공중 방향 조절 (좌측 하단)</span>
         <span class="k desktop-only">우클릭 / E</span><span class="d desktop-only">웹 집 — 조준 방향으로 대시</span>
         <span class="k touch-only">두 번째 손가락 탭</span><span class="d touch-only">웹 집 — 전방 대시</span>
         <span class="k desktop-only">S (공중)</span><span class="d desktop-only">다이브로 낙하 가속</span>
