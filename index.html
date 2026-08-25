@@ -97,6 +97,8 @@
     -webkit-tap-highlight-color:transparent;
   }
   .move-btn.held{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5)}
+  .fire-btn{border-color:rgba(255,90,78,.55);font-size:24px}
+  .fire-btn.held{background:rgba(226,54,54,.35);border-color:var(--red-hi)}
 
   #tut{
     position:fixed;z-index:15;left:50%;bottom:max(72px,calc(env(safe-area-inset-bottom) + 58px));
@@ -229,10 +231,12 @@
     <div id="move-ctl">
       <button class="move-btn" id="btn-left" tabindex="-1" aria-label="왼쪽 이동">◀</button>
       <button class="move-btn" id="btn-right" tabindex="-1" aria-label="오른쪽 이동">▶</button>
+      <button class="move-btn fire-btn" id="btn-fire" tabindex="-1" aria-label="거미줄 사격">🕸</button>
     </div>
     <div id="keys-hint">
       <span><kbd>클릭 유지</kbd>거미줄</span>
       <span><kbd>우클릭</kbd><kbd>E</kbd>웹 집</span>
+      <span><kbd>F</kbd>사격</span>
       <span><kbd>S</kbd>다이브</span>
       <span><kbd>W/S</kbd>줄 조절</span>
       <span><kbd>A/D</kbd>가속</span>
@@ -258,6 +262,8 @@
         <span class="k desktop-only">S (공중)</span><span class="d desktop-only">다이브로 낙하 가속</span>
         <span class="k desktop-only">Space</span><span class="d desktop-only">지붕에서 점프 · 줄 놓기</span>
         <span class="k">악당 탭·클릭</span><span class="d">거미줄 사격 처치 — XP·토큰 드랍!</span>
+        <span class="k touch-only">🕸 버튼</span><span class="d touch-only">가까운 악당 자동 사격</span>
+        <span class="k desktop-only">F</span><span class="d desktop-only">가까운 악당 자동 사격</span>
         <span class="k">스타일</span><span class="d">니어미스·에어타임·격추로 콤보 XP!</span>
         <span class="k">목표</span><span class="d">바닥에 떨어지지 말고 최대한 멀리!</span>
       </div>
@@ -628,10 +634,22 @@ function bindMoveBtn(id, dir){
 }
 bindMoveBtn('btn-left', 'left');
 bindMoveBtn('btn-right', 'right');
+{
+  const fb = $('btn-fire');
+  fb.addEventListener('pointerdown', e => {
+    e.preventDefault(); ensureAudio();
+    fb.classList.add('held');
+    fireAtNearest();
+  });
+  const off = () => fb.classList.remove('held');
+  fb.addEventListener('pointerup', off);
+  fb.addEventListener('pointercancel', off);
+  fb.addEventListener('contextmenu', e => e.preventDefault());
+}
 
 // 물리 키(e.code) 기반 매핑 — 한글 IME 상태에서도 W/A/S/D가 동작한다
 const CODE2KEY = {
-  KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyE: 'e', KeyP: 'p', KeyM: 'm', KeyR: 'r',
+  KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyE: 'e', KeyF: 'f', KeyP: 'p', KeyM: 'm', KeyR: 'r',
   Space: ' ', Enter: 'enter', Escape: 'escape',
   ArrowLeft: 'arrowleft', ArrowRight: 'arrowright', ArrowUp: 'arrowup', ArrowDown: 'arrowdown',
 };
@@ -653,6 +671,7 @@ window.addEventListener('keydown', e => {
   if (state === 'play' && !paused && !player.dead){
     if (k === ' ') doJumpOrRelease();
     if (k === 'e') tryZip(true);
+    if (k === 'f') fireAtNearest();
   }
 });
 window.addEventListener('keyup', e => { keys[normKey(e)] = false; });
@@ -852,6 +871,22 @@ function fireWebShot(target){
   const sp = 1900;
   webShots.push({ x: p.x, y: p.y - 10, vx: dx / d * sp, vy: dy / d * sp, life: 1.2, target });
   sfx.shoot();
+}
+function fireAtNearest(){
+  // 조준 없는 버튼·키 입력용: 가장 가까운 악당 자동 조준 사격
+  if (!playing() || shotCd > 0) return false;
+  const p = player;
+  let best = null, bd = 1200 * 1200;
+  for (const t of thugs){
+    if (t.state !== 'idle') continue;
+    const tp = thugPos(t);
+    const dx = tp.x - p.x, dy = tp.y - p.y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bd){ bd = d2; best = t; }
+  }
+  if (best){ fireWebShot(best); return true; }
+  sfx.release();   // 사거리 내 대상 없음
+  return false;
 }
 function koThug(t, impactVx, label){
   if (t.state !== 'idle') return;
