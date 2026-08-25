@@ -285,9 +285,9 @@
         <span class="k touch-only">🕸 버튼</span><span class="d touch-only">가까운 악당 자동 사격 — XP·토큰 드랍!</span>
         <span class="k desktop-only">F · 악당 클릭</span><span class="d desktop-only">거미줄 사격 처치 — XP·토큰 드랍!</span>
         <span class="k">보스전</span><span class="d">100m부터 자동 돌입 — 한 화면 보스룸 (고블린·베놈·헐크…)</span>
-        <span class="k desktop-only">G·Q·R·T·C</span><span class="d desktop-only">💣수류탄 🪤그물 ⚡웹스톰 🛡실드 💥충격파 — 쿨타임 없음!</span>
-        <span class="k touch-only">스킬 6버튼</span><span class="d touch-only">💣수류탄 🪤그물 ⚡웹스톰 🛡실드 💥충격파 — 쿨타임 없음!</span>
-        <span class="k">캡슐 아이템</span><span class="d">🧲자석 ⭐XP2배 🛡실드 💰토큰러시 🚀부스트</span>
+        <span class="k desktop-only">G·Q·R·T·C</span><span class="d desktop-only">💣🪤⚡🛡💥 — 캡슐로 모아서 1개씩 소모 (🕸 사격은 무한)</span>
+        <span class="k touch-only">스킬 6버튼</span><span class="d touch-only">💣🪤⚡🛡💥 — 캡슐로 모아서 1개씩 소모 (🕸 사격은 무한)</span>
+        <span class="k">지붕 캡슐</span><span class="d">스킬 +1 캡슐 · 🧲자석 ⭐XP2배 💰토큰러시 🚀부스트 (착지해서 획득)</span>
         <span class="k">스타일</span><span class="d">니어미스·에어타임·격추로 콤보 XP!</span>
         <span class="k">목표</span><span class="d">바닥에 떨어지지 말고 최대한 멀리!</span>
       </div>
@@ -562,6 +562,8 @@ let nextBossAtM = 100, bossWarned = false;
 let arena = null;     // {baseX, floorY, leftX, rightX, returnX, returnY, timer, clearT}
 let arenaCount = 0;
 let stormCd = 0, shieldCd = 0, waveCd = 0;
+// 특수 스킬 보유 개수 — 시작 0, 스킬 캡슐로 +1, 사용 시 1 소모
+const skillCount = { nade: 0, net: 0, storm: 0, shield: 0, wave: 0 };
 let items = [];       // {x, y, kind, t, taken, tt}
 let rings = [];       // {x, y, r, maxR, t}
 const buffs = { magnetT: 0, xpT: 0, shieldT: 0, boostT: 0 };
@@ -1225,6 +1227,9 @@ function damageBoss(n, hx, hy){
     shake = Math.max(shake, 14);
     sfx.boom();
     addXP(300, '격파 보너스!', boss.x, boss.y - 150, 'g');
+    // 보스 보급: 모든 스킬 +1
+    skillCount.nade++; skillCount.net++; skillCount.storm++; skillCount.shield++; skillCount.wave++;
+    toast('🎁 보스 보급 — 모든 스킬 +1!');
     for (let i = 0; i < 8; i++){
       const a = i / 8 * 6.28;
       coins.push({ x: boss.x + Math.cos(a) * 95, y: boss.y + Math.sin(a) * 60, t: Math.random() * 6.28, taken: false, tt: 0 });
@@ -1340,6 +1345,8 @@ function updateBoss(dt){
 // ---------- 스킬: 거미줄 수류탄 · 웹 그물 ----------
 function throwGrenade(){
   if (!playing()) return;
+  if (skillCount.nade <= 0){ sfx.release(); return; }
+  skillCount.nade--;
   const p = player;
   const dir = p.vx >= -60 ? 1 : -1;
   let vx = dir * 620 + p.vx * 0.4, vy = -680;
@@ -1373,6 +1380,7 @@ function explodeGrenade(g){
 }
 function throwNet(){
   if (!playing()) return;
+  if (skillCount.net <= 0){ sfx.release(); return; }
   let target = (boss && boss.state === 'fly') ? boss : null;
   if (!target){
     let bd = 1200 * 1200;
@@ -1385,6 +1393,7 @@ function throwNet(){
     }
   }
   if (!target){ sfx.release(); return; }
+  skillCount.net--;
   const tp = targetPos(target);
   const dx = tp.x - player.x, dy = tp.y - (player.y - 10);
   const d = Math.hypot(dx, dy) || 1;
@@ -1394,6 +1403,7 @@ function throwNet(){
 function webStorm(){
   // ⚡ 웹 스톰: 부채꼴로 유도탄 8발 일제 발사
   if (!playing()) return;
+  if (skillCount.storm <= 0){ sfx.release(); return; }
   const targets = [];
   if (boss && boss.state === 'fly') targets.push(boss);
   for (const t of thugs){
@@ -1403,6 +1413,7 @@ function webStorm(){
     if (dx * dx + dy * dy < 1500 * 1500) targets.push(t);
   }
   if (!targets.length){ sfx.release(); return; }
+  skillCount.storm--;
   for (let i = 0; i < 8; i++){
     const tg = targets[i % targets.length];
     const a = -Math.PI / 2 + (i - 3.5) * 0.35;
@@ -1414,6 +1425,8 @@ function webStorm(){
 function webShield(){
   // 🛡 웹 실드: 5초 무적 돔
   if (!playing()) return;
+  if (skillCount.shield <= 0){ sfx.release(); return; }
+  skillCount.shield--;
   player.hitCd = Math.max(player.hitCd, 5);
   buffs.shieldT = Math.max(buffs.shieldT, 5);
   webPuff(player.x, player.y);
@@ -1422,6 +1435,8 @@ function webShield(){
 function shockwave(){
   // 💥 충격파: 광역 격추 + 보스 3딜 + 보스탄 소거
   if (!playing()) return;
+  if (skillCount.wave <= 0){ sfx.release(); return; }
+  skillCount.wave--;
   const p = player;
   rings.push({ x: p.x, y: p.y, r: 24, maxR: 340, t: 0 });
   for (const t of thugs){
@@ -1442,18 +1457,27 @@ function shockwave(){
   sfx.boom();
 }
 const ITEM_INFO = {
-  magnet: { icon: '🧲', msg: '🧲 자석! 12초간 토큰을 빨아들인다' },
-  xp:     { icon: '⭐', msg: '⭐ XP 2배 — 12초!' },
-  shield: { icon: '🛡️', msg: '🛡 실드 — 8초 무적!' },
-  rush:   { icon: '💰', msg: '💰 토큰 러시!' },
-  boost:  { icon: '🚀', msg: '🚀 부스트!' },
+  magnet: { msg: '🧲 자석! 12초간 토큰을 빨아들인다' },
+  xp:     { msg: '⭐ XP 2배 — 12초!' },
+  rush:   { msg: '💰 토큰 러시!' },
+  boost:  { msg: '🚀 부스트!' },
 };
+const SKILL_NAME = { nade: '💣 수류탄', net: '🪤 웹 그물', storm: '⚡ 웹 스톰', shield: '🛡 웹 실드', wave: '💥 충격파' };
 function applyItem(it){
   const p = player;
+  // 스킬 캡슐: 보유 개수 +1
+  if (skillCount[it.kind] !== undefined){
+    skillCount[it.kind]++;
+    toast(SKILL_NAME[it.kind] + ' +1 — 보유 ' + skillCount[it.kind] + '개');
+    addXP(30, '스킬 캡슐!', it.x, it.y - 26, 'w');
+    bumpCombo();
+    coinBurst(it.x, it.y);
+    sfx.item();
+    return;
+  }
   switch (it.kind){
     case 'magnet': buffs.magnetT = 12; break;
     case 'xp': buffs.xpT = 12; break;
-    case 'shield': buffs.shieldT = Math.max(buffs.shieldT, 8); p.hitCd = Math.max(p.hitCd, 8); break;
     case 'rush': {
       // 주변에 토큰 12개 소환 + 3초 미니 자석으로 흡수
       for (let k = 0; k < 12; k++){
@@ -1657,6 +1681,7 @@ function resetWorld(){
   grenades = []; nets = []; gCd = 0; nCd = 0;
   nextBossAtM = 100; bossWarned = false; arena = null; arenaCount = 0;
   stormCd = 0; shieldCd = 0; waveCd = 0;
+  skillCount.nade = skillCount.net = skillCount.storm = skillCount.shield = skillCount.wave = 0;
   items = []; rings = [];
   buffs.magnetT = 0; buffs.xpT = 0; buffs.shieldT = 0; buffs.boostT = 0;
   buildings.push({ x: -260, w: 520, top: 620, seed: 7 });
@@ -1741,15 +1766,27 @@ function genAhead(){
         });
       }
     }
-    // 버프 캡슐 아이템 — 건물 지붕 바로 위 (착지해야 먹을 수 있다)
-    if (wrand() < 0.28){
-      const kinds = ['magnet', 'xp', 'shield', 'rush', 'boost'];
-      items.push({
-        x: b.x + b.w * (0.2 + wrand() * 0.6),
-        y: b.top - 34,
-        kind: kinds[Math.floor(wrand() * kinds.length)],
-        t: wrand() * 6.28, taken: false, tt: 0,
-      });
+    // 캡슐 아이템 — 건물 지붕 바로 위 (착지해야 먹을 수 있다)
+    {
+      const roll = wrand();
+      let kind = null;
+      if (roll < 0.3){
+        // 스킬 캡슐: 해당 스킬 보유 +1
+        const kinds = ['nade', 'net', 'storm', 'shield', 'wave'];
+        kind = kinds[Math.floor(wrand() * kinds.length)];
+      } else if (roll < 0.45){
+        // 버프 캡슐: 즉시 발동
+        const kinds = ['magnet', 'xp', 'rush', 'boost'];
+        kind = kinds[Math.floor(wrand() * kinds.length)];
+      }
+      if (kind){
+        items.push({
+          x: b.x + b.w * (0.2 + wrand() * 0.6),
+          y: b.top - 34,
+          kind,
+          t: wrand() * 6.28, taken: false, tt: 0,
+        });
+      }
     }
     genX = b.x + b.w;
   }
@@ -2170,11 +2207,21 @@ function updateFX(dt){
 
 // ---------- HUD ----------
 let hudDirty = 0;
+function countView(btnId, spanId, n){
+  const btn = $(btnId), span = $(spanId);
+  if (n <= 0){ btn.classList.add('cool'); span.textContent = '0'; }
+  else { btn.classList.remove('cool'); span.textContent = '×' + n; }
+}
 function updateHUD(){
   scoreEl.textContent = score;
   distEl.textContent = distM + 'm';
   coinsEl.textContent = '🕸 ' + coinCount;
   kosEl.textContent = '격추 ' + koCount;
+  countView('btn-nade', 'cd-nade', skillCount.nade);
+  countView('btn-net', 'cd-net', skillCount.net);
+  countView('btn-storm', 'cd-storm', skillCount.storm);
+  countView('btn-shield', 'cd-shield', skillCount.shield);
+  countView('btn-wave', 'cd-wave', skillCount.wave);
   let bt = '';
   if (buffs.magnetT > 0) bt += '🧲' + Math.ceil(buffs.magnetT) + ' ';
   if (buffs.xpT > 0) bt += '⭐' + Math.ceil(buffs.xpT) + ' ';
@@ -2878,7 +2925,10 @@ function drawBossBullets(){
     }
   }
 }
-const ITEM_ICON = { magnet: '🧲', xp: '⭐', shield: '🛡️', rush: '💰', boost: '🚀' };
+const ITEM_ICON = {
+  magnet: '🧲', xp: '⭐', rush: '💰', boost: '🚀',
+  nade: '💣', net: '🪤', storm: '⚡', shield: '🛡️', wave: '💥',
+};
 function drawItems(viewL, viewR){
   for (const it of items){
     if (it.x < viewL || it.x > viewR) continue;
