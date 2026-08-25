@@ -385,19 +385,19 @@ function rebuildGradients(){
 }
 
 // ---------- 상수 ----------
-const G = 2300;
+const G = 2150;
 const STREET_Y = 1000;
 const MAX_ROPE = 560;
 const MIN_ROPE = 90;
 const REEL_SPEED = 240;
-const SWING_ACCEL = 760;
-const MAX_SPEED = 2500;
+const SWING_ACCEL = 720;
+const MAX_SPEED = 2000;
 const RUN_SPEED = 430;
 const RUN_ACCEL = 2600;
 const JUMP_V = -820;
-const DIVE_ACCEL = 2400;
-const ZIP_SPEED_MIN = 1050;
-const ZIP_BOOST = 380;
+const DIVE_ACCEL = 2100;
+const ZIP_SPEED_MIN = 950;
+const ZIP_BOOST = 320;
 const ZIP_CD = 1.1;
 const CEIL_Y = -120;         // 이보다 높은 곳엔 거미줄 부착 불가 (건물이 없는 하늘)
 const PW = 30, PH = 44;
@@ -819,7 +819,7 @@ function autoAnchorPoint(){
   // PS식 보조 조준 지점: 진행 방향 앞·위쪽 (깊이 떨어졌으면 더 높이)
   const p = player;
   const dir = p.vx >= -60 ? 1 : -1;
-  const fwd = clamp(Math.abs(p.vx) * 0.25, 180, 320);
+  const fwd = clamp(Math.abs(p.vx) * 0.25, 240, 340);
   const lift = p.y > 640 ? 470 : 380;
   // 높이 떠 있으면 천장선에 클램프 — 아래 빌딩을 향해 회수용 웹을 쏜다
   return { x: p.x + dir * fwd, y: Math.max(p.y - lift, CEIL_Y) };
@@ -1502,7 +1502,8 @@ function genAhead(){
     const diff = clamp(maxX / DIST_PER_M / 900, 0, 1);
     const gap = rand(70, 150) + diff * rand(80, 230);
     const w = rand(150, 330);
-    const top = clamp(prev.top + rand(-230, 230), 320, 800);
+    // 오르막 단차는 150px로 제한 (자동 조준 스윙으로 넘을 수 있는 높이), 내리막은 자유
+    const top = clamp(prev.top + rand(-150, 230), 320, 800);
     const b = { x: genX + gap, w, top, seed: (wrand() * 1e9) >>> 0 };
     buildings.push(b);
 
@@ -1725,7 +1726,7 @@ function physics(dt){
     p.vx += axIn * air * dt;
     if (p.attached){
       // 자동 감기: 스윙이 서서히 상승해 협곡 탈출을 돕는다
-      p.rope = Math.max(MIN_ROPE, p.rope - p.rope * 0.055 * dt);
+      p.rope = Math.max(MIN_ROPE, p.rope - p.rope * 0.05 * dt);
       if (inUp()) p.rope = Math.max(MIN_ROPE, p.rope - REEL_SPEED * dt);
       if (inDown()) p.rope = Math.min(MAX_ROPE, p.rope + REEL_SPEED * dt);
     }
@@ -2741,9 +2742,9 @@ function drawZipFx(){
 function drawSpeedLines(){
   const p = player;
   const sp = Math.hypot(p.vx, p.vy);
-  if (sp < 1400 || p.grounded || p.dead) return;
+  if (sp < 1250 || p.grounded || p.dead) return;
   const nx = p.vx / sp, ny = p.vy / sp;
-  const a = clamp((sp - 1400) / 1100, 0, 0.5);
+  const a = clamp((sp - 1250) / 650, 0, 0.5);
   ctx.strokeStyle = 'rgba(255,255,255,' + a + ')';
   ctx.lineWidth = 2;
   for (let i = 0; i < 5; i++){
@@ -2912,7 +2913,7 @@ function render(){
 
 // ---------- 카메라 ----------
 function updateCamera(dt){
-  const lead = clamp(player.vx * 0.22, -60, 260);
+  const lead = clamp(player.vx * 0.2, -60, 220);
   const tx = player.x + lead + 120;
   const ty = Math.min(player.y - 100, STREET_Y - 0.42 * (H / SCALE));
   camX = lerp(camX, tx, Math.min(1, dt * 4.5));
