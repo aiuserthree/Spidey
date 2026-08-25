@@ -3268,6 +3268,7 @@ function drawBuddies(){
     ctx.globalAlpha = fade;
     ctx.translate(g.x, g.y);
     ctx.rotate(Math.sin(elapsed * 3 + i * 2) * 0.12);
+    ctx.scale(0.7, 0.7);   // 아담해야 귀엽다
     drawBuddySpider(elapsed, i);
     ctx.restore();
   }
