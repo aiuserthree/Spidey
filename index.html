@@ -93,7 +93,8 @@
   body.touch #hud.on #move-ctl{display:grid}
   #walk-ctl{
     position:absolute;left:16px;bottom:max(56px, calc(env(safe-area-inset-bottom) + 40px));
-    display:none;gap:16px;pointer-events:auto;
+    display:none;gap:16px;pointer-events:auto;touch-action:none;
+    padding:14px;margin:-14px;   /* 보이지 않는 여유 히트 영역 */
   }
   body.touch #hud.on #walk-ctl{display:flex}
   .move-btn{
@@ -590,8 +591,9 @@ let pointerDown = false, pointerX = 0, pointerY = 0, activePointer = null;
 const pad = { connected: false, index: -1, left: false, right: false, up: false, down: false, swing: false, prev: {} };
 // 터치 드래그 조향: 누른 채 끌면 좌우 가속·줄 감기·다이브
 const touchCtl = { active: false, startX: 0, startY: 0, steerX: 0, steerY: 0 };
-// 우측 하단 ◀ ▶ 버튼: 지상 걷기 + 공중 방향 조절
+// ◀ ▶ 버튼: 지상 걷기 + 공중 방향 조절 (가상 패드 방식)
 const touchMove = { left: false, right: false };
+let clearWalkPointers = () => {};
 
 function screenToWorld(sx, sy){
   return { x: (sx - W / 2) / SCALE + camX, y: (sy - H / 2) / SCALE + camY };
@@ -702,21 +704,65 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
   fb.addEventListener('pointercancel', off);
   fb.addEventListener('contextmenu', e => e.preventDefault());
 }
-// ◀ ▶ 이동 버튼
-function bindMoveBtn(id, dir){
-  const el = $(id);
-  const set = v => { touchMove[dir] = v; el.classList.toggle('held', v); };
-  el.addEventListener('pointerdown', e => {
+// ◀ ▶ 이동: 가상 패드 — 영역 전체에서 손가락 위치로 판정 (슬라이드·빗맞음 허용)
+{
+  const wc = $('walk-ctl');
+  const btnL = $('btn-left'), btnR = $('btn-right');
+  const walkPointers = new Map();   // pointerId -> 'left' | 'right' | null
+  const PAD = 16;
+  function hitDir(x, y){
+    const r1 = btnL.getBoundingClientRect(), r2 = btnR.getBoundingClientRect();
+    if (x >= r1.left - PAD && x <= r1.right + PAD && y >= r1.top - PAD && y <= r1.bottom + PAD) return 'left';
+    if (x >= r2.left - PAD && x <= r2.right + PAD && y >= r2.top - PAD && y <= r2.bottom + PAD) return 'right';
+    return null;
+  }
+  function refreshWalk(){
+    let l = false, r = false;
+    for (const d of walkPointers.values()){
+      if (d === 'left') l = true;
+      else if (d === 'right') r = true;
+    }
+    touchMove.left = l; touchMove.right = r;
+    btnL.classList.toggle('held', l);
+    btnR.classList.toggle('held', r);
+  }
+  clearWalkPointers = () => { walkPointers.clear(); refreshWalk(); };
+  wc.addEventListener('pointerdown', e => {
     e.preventDefault(); ensureAudio();
-    try { el.setPointerCapture(e.pointerId); } catch(err){}
-    set(true);
+    walkPointers.set(e.pointerId, hitDir(e.clientX, e.clientY));
+    refreshWalk();
   });
-  el.addEventListener('pointerup', () => set(false));
-  el.addEventListener('pointercancel', () => set(false));
-  el.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('pointermove', e => {
+    if (!walkPointers.has(e.pointerId)) return;
+    walkPointers.set(e.pointerId, hitDir(e.clientX, e.clientY));
+    refreshWalk();
+  });
+  const dropWalk = e => { if (walkPointers.delete(e.pointerId)) refreshWalk(); };
+  window.addEventListener('pointerup', dropWalk);
+  window.addEventListener('pointercancel', dropWalk);
+  wc.addEventListener('contextmenu', e => e.preventDefault());
+  // 이중 안전장치: 브라우저가 제스처 오인으로 pointercancel을 쏴도
+  // 실제 터치가 존 위에 남아있으면 터치 이벤트로 다시 잡는다
+  document.addEventListener('touchmove', e => {
+    let changed = false;
+    for (const t of e.touches){
+      const key = 't' + t.identifier;
+      const d = hitDir(t.clientX, t.clientY);
+      if (d){ if (walkPointers.get(key) !== d){ walkPointers.set(key, d); changed = true; } }
+      else if (walkPointers.delete(key)) changed = true;
+    }
+    if (changed) refreshWalk();
+  }, { passive: true });
+  const dropTouch = e => {
+    let changed = false;
+    for (const t of e.changedTouches){
+      if (walkPointers.delete('t' + t.identifier)) changed = true;
+    }
+    if (changed) refreshWalk();
+  };
+  document.addEventListener('touchend', dropTouch);
+  document.addEventListener('touchcancel', dropTouch);
 }
-bindMoveBtn('btn-left', 'left');
-bindMoveBtn('btn-right', 'right');
 // 💣 수류탄 · 🪤 그물 버튼
 function bindSkillBtn(id, fn){
   const el = $(id);
@@ -781,9 +827,7 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('blur', () => {
   clearKeys();
   pad.left = pad.right = pad.up = pad.down = pad.swing = false;
-  touchMove.left = touchMove.right = false;
-  $('btn-left').classList.remove('held');
-  $('btn-right').classList.remove('held');
+  clearWalkPointers();
   $('btn-fire').classList.remove('held');
   if (state === 'play' && !paused && !player.dead) togglePause();
 });
@@ -1917,9 +1961,7 @@ function startGame(){
   resetWorld();
   activePointer = null; pointerDown = false;
   touchCtl.active = false; touchCtl.steerX = 0; touchCtl.steerY = 0;
-  touchMove.left = touchMove.right = false;
-  $('btn-left').classList.remove('held');
-  $('btn-right').classList.remove('held');
+  clearWalkPointers();
   $('btn-fire').classList.remove('held');
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   state = 'play'; paused = false;
