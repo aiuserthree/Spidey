@@ -91,6 +91,11 @@
     display:none;grid-template-columns:repeat(3, auto);gap:10px;pointer-events:auto;
   }
   body.touch #hud.on #move-ctl{display:grid}
+  #walk-ctl{
+    position:absolute;right:16px;bottom:max(16px,env(safe-area-inset-bottom));
+    display:none;gap:14px;pointer-events:auto;
+  }
+  body.touch #hud.on #walk-ctl{display:flex}
   .move-btn{
     width:60px;height:60px;border-radius:50%;
     border:1px solid var(--line);background:var(--panel);color:var(--ink);
@@ -237,6 +242,10 @@
       <div id="best-hud"><span class="hud-label">최고 기록</span><br><span id="best-val">0</span></div>
       <button class="icon-btn" id="mute-btn" aria-label="소리 켜기/끄기"></button>
     </div>
+    <div id="walk-ctl">
+      <button class="move-btn" id="btn-left" tabindex="-1" aria-label="왼쪽 이동">◀</button>
+      <button class="move-btn" id="btn-right" tabindex="-1" aria-label="오른쪽 이동">▶</button>
+    </div>
     <div id="move-ctl">
       <button class="move-btn fire-btn skill-btn" id="btn-fire" tabindex="-1" aria-label="거미줄 사격">🕸</button>
       <button class="move-btn fire-btn skill-btn" id="btn-nade" tabindex="-1" aria-label="거미줄 수류탄">💣<span class="cd" id="cd-nade"></span></button>
@@ -268,6 +277,7 @@
         <span class="k desktop-only">클릭 유지</span><span class="d desktop-only">거미줄을 쏘고, 떼면 놓는다</span>
         <span class="k touch-only">길게 터치</span><span class="d touch-only">자동 조준 스윙 — 떼면 놓는다</span>
         <span class="k touch-only">누른 채 드래그</span><span class="d touch-only">좌우 가속 · 위로 줄 감기 · 아래로 다이브</span>
+        <span class="k touch-only">◀ ▶ 버튼</span><span class="d touch-only">걷기 · 공중 방향 조절 (우측 하단)</span>
         <span class="k desktop-only">우클릭 / E</span><span class="d desktop-only">웹 집 — 조준 방향으로 대시</span>
         <span class="k touch-only">두 번째 손가락 탭</span><span class="d touch-only">웹 집 — 전방 대시</span>
         <span class="k desktop-only">S (공중)</span><span class="d desktop-only">다이브로 낙하 가속</span>
@@ -579,12 +589,14 @@ let pointerDown = false, pointerX = 0, pointerY = 0, activePointer = null;
 const pad = { connected: false, index: -1, left: false, right: false, up: false, down: false, swing: false, prev: {} };
 // 터치 드래그 조향: 누른 채 끌면 좌우 가속·줄 감기·다이브
 const touchCtl = { active: false, startX: 0, startY: 0, steerX: 0, steerY: 0 };
+// 우측 하단 ◀ ▶ 버튼: 지상 걷기 + 공중 방향 조절
+const touchMove = { left: false, right: false };
 
 function screenToWorld(sx, sy){
   return { x: (sx - W / 2) / SCALE + camX, y: (sy - H / 2) / SCALE + camY };
 }
-const inLeft  = () => keys['a'] || keys['arrowleft'] || pad.left || touchCtl.steerX < 0;
-const inRight = () => keys['d'] || keys['arrowright'] || pad.right || touchCtl.steerX > 0;
+const inLeft  = () => keys['a'] || keys['arrowleft'] || pad.left || touchCtl.steerX < 0 || touchMove.left;
+const inRight = () => keys['d'] || keys['arrowright'] || pad.right || touchCtl.steerX > 0 || touchMove.right;
 const inUp    = () => keys['w'] || keys['arrowup'] || pad.up || touchCtl.steerY < 0;
 const inDown  = () => keys['s'] || keys['arrowdown'] || pad.down || touchCtl.steerY > 0;
 
@@ -690,6 +702,21 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
   fb.addEventListener('pointercancel', off);
   fb.addEventListener('contextmenu', e => e.preventDefault());
 }
+// ◀ ▶ 이동 버튼
+function bindMoveBtn(id, dir){
+  const el = $(id);
+  const set = v => { touchMove[dir] = v; el.classList.toggle('held', v); };
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault(); ensureAudio();
+    try { el.setPointerCapture(e.pointerId); } catch(err){}
+    set(true);
+  });
+  el.addEventListener('pointerup', () => set(false));
+  el.addEventListener('pointercancel', () => set(false));
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+bindMoveBtn('btn-left', 'left');
+bindMoveBtn('btn-right', 'right');
 // 💣 수류탄 · 🪤 그물 버튼
 function bindSkillBtn(id, fn){
   const el = $(id);
@@ -752,6 +779,9 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('blur', () => {
   clearKeys();
   pad.left = pad.right = pad.up = pad.down = pad.swing = false;
+  touchMove.left = touchMove.right = false;
+  $('btn-left').classList.remove('held');
+  $('btn-right').classList.remove('held');
   $('btn-fire').classList.remove('held');
   if (state === 'play' && !paused && !player.dead) togglePause();
 });
@@ -1777,6 +1807,9 @@ function startGame(){
   resetWorld();
   activePointer = null; pointerDown = false;
   touchCtl.active = false; touchCtl.steerX = 0; touchCtl.steerY = 0;
+  touchMove.left = touchMove.right = false;
+  $('btn-left').classList.remove('held');
+  $('btn-right').classList.remove('held');
   $('btn-fire').classList.remove('held');
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   state = 'play'; paused = false;
