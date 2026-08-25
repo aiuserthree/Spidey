@@ -87,8 +87,10 @@
 
   /* 모바일 좌우 이동 버튼 */
   #move-ctl{
-    position:absolute;right:14px;bottom:max(14px,env(safe-area-inset-bottom));
+    position:absolute;right:14px;bottom:max(20px, calc(env(safe-area-inset-bottom) + 8px));
     display:none;grid-template-columns:repeat(3, auto);gap:7px;pointer-events:auto;
+    touch-action:none;
+    padding:14px;margin:-14px;   /* 보이지 않는 여유 히트 영역 */
   }
   body.touch #hud.on #move-ctl{display:grid}
   #walk-ctl{
@@ -594,6 +596,7 @@ const touchCtl = { active: false, startX: 0, startY: 0, steerX: 0, steerY: 0 };
 // ◀ ▶ 버튼: 지상 걷기 + 공중 방향 조절 (가상 패드 방식)
 const touchMove = { left: false, right: false };
 let clearWalkPointers = () => {};
+let clearSkillPresses = () => {};
 
 function screenToWorld(sx, sy){
   return { x: (sx - W / 2) / SCALE + camX, y: (sy - H / 2) / SCALE + camY };
@@ -690,19 +693,52 @@ window.addEventListener('pointercancel', e => {
 });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-// 🕸 사격 버튼 바인딩
+// 🕸 사격 + 스킬 그리드: 가상 패드 — 컨테이너 전체에서 최근접 버튼 판정
+// (버튼 사이 7px 갭·가장자리 빗맞음이 컨테이너에 먹혀 씹히던 문제 해결)
 {
-  const fb = $('btn-fire');
-  fb.addEventListener('pointerdown', e => {
+  const mc = $('move-ctl');
+  const SKILL_BTNS = [
+    { el: $('btn-fire'),   fn: fireAtNearest },
+    { el: $('btn-nade'),   fn: throwGrenade },
+    { el: $('btn-net'),    fn: throwNet },
+    { el: $('btn-storm'),  fn: webStorm },
+    { el: $('btn-shield'), fn: webShield },
+    { el: $('btn-wave'),   fn: shockwave },
+    { el: $('btn-buddy'),  fn: summonBuddies },
+  ];
+  const SLOP = 8;      // 버튼 rect 직접 확장
+  const SNAP = 42;     // 갭·여백 터치를 최근접 버튼 중심으로 흡수하는 반경
+  function hitSkill(x, y){
+    let near = null, nd = SNAP * SNAP;
+    for (const s of SKILL_BTNS){
+      const r = s.el.getBoundingClientRect();
+      if (x >= r.left - SLOP && x <= r.right + SLOP && y >= r.top - SLOP && y <= r.bottom + SLOP) return s;
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+      if (d2 < nd){ nd = d2; near = s; }
+    }
+    return near;
+  }
+  const pressed = new Map();   // pointerId -> el (held 표시 해제용)
+  mc.addEventListener('pointerdown', e => {
     e.preventDefault(); ensureAudio();
-    try { fb.setPointerCapture(e.pointerId); } catch(err){}
-    fb.classList.add('held');
-    fireAtNearest();
+    const s = hitSkill(e.clientX, e.clientY);
+    if (!s) return;
+    pressed.set(e.pointerId, s.el);
+    s.el.classList.add('held');
+    s.fn();
   });
-  const off = () => fb.classList.remove('held');
-  fb.addEventListener('pointerup', off);
-  fb.addEventListener('pointercancel', off);
-  fb.addEventListener('contextmenu', e => e.preventDefault());
+  const dropPress = e => {
+    const el = pressed.get(e.pointerId);
+    if (el){ pressed.delete(e.pointerId); el.classList.remove('held'); }
+  };
+  window.addEventListener('pointerup', dropPress);
+  window.addEventListener('pointercancel', dropPress);
+  mc.addEventListener('contextmenu', e => e.preventDefault());
+  clearSkillPresses = () => {
+    pressed.clear();
+    for (const s of SKILL_BTNS) s.el.classList.remove('held');
+  };
 }
 // ◀ ▶ 이동: 가상 패드 — 영역 전체에서 손가락 위치로 판정 (슬라이드·빗맞음 허용)
 {
@@ -742,11 +778,23 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
   window.addEventListener('pointercancel', dropWalk);
   wc.addEventListener('contextmenu', e => e.preventDefault());
   // 이중 안전장치: 브라우저가 제스처 오인으로 pointercancel을 쏴도
-  // 실제 터치가 존 위에 남아있으면 터치 이벤트로 다시 잡는다
+  // 실제 터치가 존 위에 남아있으면 터치 이벤트로 다시 잡는다.
+  // 단, 걷기 존에서 시작한 터치만 — 스윙 중인 손가락이 버튼 위를
+  // 스쳐 지나갈 때 팬텀 ◀▶ 입력이 생기는 것을 막는다.
+  const padTouches = new Set();   // 걷기 존에서 시작한 터치 identifier
+  document.addEventListener('touchstart', e => {
+    const r = wc.getBoundingClientRect();
+    for (const t of e.changedTouches){
+      if (t.clientX >= r.left && t.clientX <= r.right && t.clientY >= r.top && t.clientY <= r.bottom){
+        padTouches.add(t.identifier);
+      }
+    }
+  }, { passive: true });
   document.addEventListener('touchmove', e => {
     let changed = false;
     for (const t of e.touches){
       const key = 't' + t.identifier;
+      if (!padTouches.has(t.identifier) && !walkPointers.has(key)) continue;
       const d = hitDir(t.clientX, t.clientY);
       if (d){ if (walkPointers.get(key) !== d){ walkPointers.set(key, d); changed = true; } }
       else if (walkPointers.delete(key)) changed = true;
@@ -756,34 +804,20 @@ canvas.addEventListener('contextmenu', e => e.preventDefault());
   const dropTouch = e => {
     let changed = false;
     for (const t of e.changedTouches){
+      padTouches.delete(t.identifier);
       if (walkPointers.delete('t' + t.identifier)) changed = true;
+    }
+    // 손가락이 하나도 안 남았으면 pointerup 유실로 고착된 유령 포인터까지 전부 해제
+    if (e.touches.length === 0){
+      padTouches.clear();
+      if (walkPointers.size){ walkPointers.clear(); changed = true; }
+      clearSkillPresses();
     }
     if (changed) refreshWalk();
   };
   document.addEventListener('touchend', dropTouch);
   document.addEventListener('touchcancel', dropTouch);
 }
-// 💣 수류탄 · 🪤 그물 버튼
-function bindSkillBtn(id, fn){
-  const el = $(id);
-  el.addEventListener('pointerdown', e => {
-    e.preventDefault(); ensureAudio();
-    try { el.setPointerCapture(e.pointerId); } catch(err){}
-    el.classList.add('held');
-    fn();
-  });
-  const off = () => el.classList.remove('held');
-  el.addEventListener('pointerup', off);
-  el.addEventListener('pointercancel', off);
-  el.addEventListener('contextmenu', e => e.preventDefault());
-}
-bindSkillBtn('btn-nade', throwGrenade);
-bindSkillBtn('btn-net', throwNet);
-bindSkillBtn('btn-storm', webStorm);
-bindSkillBtn('btn-shield', webShield);
-bindSkillBtn('btn-wave', shockwave);
-bindSkillBtn('btn-buddy', summonBuddies);
-
 // 물리 키(e.code) 기반 매핑 — 한글 IME 상태에서도 W/A/S/D가 동작한다
 const CODE2KEY = {
   KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyE: 'e', KeyF: 'f', KeyG: 'g', KeyQ: 'q',
@@ -828,7 +862,7 @@ window.addEventListener('blur', () => {
   clearKeys();
   pad.left = pad.right = pad.up = pad.down = pad.swing = false;
   clearWalkPointers();
-  $('btn-fire').classList.remove('held');
+  clearSkillPresses();
   if (state === 'play' && !paused && !player.dead) togglePause();
 });
 
@@ -1962,7 +1996,7 @@ function startGame(){
   activePointer = null; pointerDown = false;
   touchCtl.active = false; touchCtl.steerX = 0; touchCtl.steerY = 0;
   clearWalkPointers();
-  $('btn-fire').classList.remove('held');
+  clearSkillPresses();
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   state = 'play'; paused = false;
   menuEl.classList.add('hidden');
@@ -2024,9 +2058,12 @@ function finishGameOver(){
   overEl.classList.remove('hidden');
 }
 $('start-btn').addEventListener('click', () => { ensureAudio(); startGame(); });
-$('retry-btn').addEventListener('click', () => { ensureAudio(); startGame(); });
+// 사망 직전 연타가 게임오버 패널에 흘러들어 결과 화면을 스킵하지 않게
+// 키보드·게임패드와 동일한 등장 유예를 적용한다
+$('retry-btn').addEventListener('click', () => { if (!overReady()) return; ensureAudio(); startGame(); });
 $('resume-btn').addEventListener('click', () => togglePause());
 $('menu-btn').addEventListener('click', () => {
+  if (!overReady()) return;
   state = 'menu';
   hudEl.classList.remove('on');
   overEl.classList.add('hidden');
