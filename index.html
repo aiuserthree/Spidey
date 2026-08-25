@@ -114,7 +114,25 @@
     position:absolute;right:3px;bottom:1px;font-size:10px;font-weight:700;
     color:var(--gold);text-shadow:0 1px 3px rgba(0,0,0,.85);
   }
-  .skill-btn.cool{opacity:.4}
+  /* 잠김: 무채색 + 반투명, 활성: 골드 글로우 — 상태 대비를 확실히 */
+  .skill-btn.cool{opacity:.4;filter:grayscale(.85)}
+  .skill-btn.on{
+    border-color:rgba(255,196,107,.85);
+    background:rgba(255,196,107,.14);
+    box-shadow:0 0 13px rgba(255,196,107,.45), inset 0 0 7px rgba(255,196,107,.18);
+  }
+  /* 누름 피드백(빨강)은 활성 글로우보다 우선 */
+  .skill-btn.held{background:rgba(226,54,54,.35);border-color:var(--red-hi)}
+  /* 활성화 순간: 팝 + 골드 링 확산 */
+  .skill-btn.pop{animation:skillpop .7s cubic-bezier(.2,.8,.3,1.2)}
+  @keyframes skillpop{
+    0%{transform:scale(1);box-shadow:0 0 0 0 rgba(255,196,107,.85)}
+    40%{transform:scale(1.42)}
+    100%{transform:scale(1);box-shadow:0 0 0 24px rgba(255,196,107,0)}
+  }
+  /* 만료 임박(10초 이하): 배지 빨간 깜빡임 */
+  .skill-btn .cd.low{color:var(--red-hi);animation:cdblink 1s steps(2,end) infinite}
+  @keyframes cdblink{50%{opacity:.25}}
 
   #tut{
     position:fixed;z-index:15;left:50%;bottom:max(72px,calc(env(safe-area-inset-bottom) + 58px));
@@ -223,7 +241,7 @@
 
   @media (prefers-reduced-motion: reduce){
     .overlay,#tut,#toast{transition:none}
-    #new-best.on,#combo.pulse .cnum{animation:none}
+    #new-best.on,#combo.pulse .cnum,.skill-btn.pop,.skill-btn .cd.low{animation:none}
   }
 </style>
 
@@ -1318,7 +1336,7 @@ function damageBoss(n, hx, hy){
     sfx.boom();
     addXP(300, '격파 보너스!', boss.x, boss.y - 150, 'g');
     // 보스 보급: 모든 스킬 3분 충전 + 난이도 상승
-    for (const k in skillT) skillT[k] = Math.max(skillT[k], SKILL_DURATION);
+    for (const k in skillT){ skillT[k] = Math.max(skillT[k], SKILL_DURATION); popSkillBtn(k); }
     toast('🔥 Lv.' + (bossKills + 1) + ' 돌입 — 🎁 모든 스킬 3분 충전!');
     for (let i = 0; i < 8; i++){
       const a = i / 8 * 6.28;
@@ -1548,12 +1566,23 @@ const ITEM_INFO = {
   boost:  { msg: '🚀 부스트!' },
 };
 const SKILL_NAME = { nade: '💣 수류탄', net: '🪤 웹 그물', storm: '⚡ 웹 스톰', shield: '🛡 웹 실드', wave: '💥 충격파', buddy: '🕷 보조 스파이디' };
+const SKILL_BTN_ID = { nade: 'btn-nade', net: 'btn-net', storm: 'btn-storm', shield: 'btn-shield', wave: 'btn-wave', buddy: 'btn-buddy' };
+// 활성화 순간 버튼 팝 — 다음 HUD 갱신을 기다리지 않고 즉시 활성 표시로 전환
+function popSkillBtn(kind){
+  const btn = $(SKILL_BTN_ID[kind]);
+  if (!btn) return;
+  btn.classList.remove('cool'); btn.classList.add('on');
+  btn.classList.remove('pop');
+  void btn.offsetWidth;   // 리플로우로 애니메이션 재시작 (연속 획득 대응)
+  btn.classList.add('pop');
+}
 function applyItem(it){
   const p = player;
   // 스킬 캡슐: 3분간 해당 스킬 무한 사용 (재획득 시 3분 재충전)
   if (skillT[it.kind] !== undefined){
     const fresh = skillT[it.kind] <= 0;
     skillT[it.kind] = SKILL_DURATION;
+    popSkillBtn(it.kind);
     if (fresh){
       toast('🎉 ' + SKILL_NAME[it.kind] + ' — 3분간 무한 사용!');
       addXP(50, '스킬 해금!', it.x, it.y - 26, 'w');
@@ -2370,8 +2399,9 @@ function updateFX(dt){
 let hudDirty = 0;
 function countView(btnId, spanId, t){
   const btn = $(btnId), span = $(spanId);
-  if (t <= 0){ btn.classList.add('cool'); span.textContent = '🔒'; }
-  else { btn.classList.remove('cool'); span.textContent = Math.ceil(t); }
+  if (t <= 0){ btn.classList.add('cool'); btn.classList.remove('on'); span.textContent = '🔒'; }
+  else { btn.classList.remove('cool'); btn.classList.add('on'); span.textContent = Math.ceil(t); }
+  span.classList.toggle('low', t > 0 && t <= 10);
 }
 function updateHUD(){
   scoreEl.textContent = score;
