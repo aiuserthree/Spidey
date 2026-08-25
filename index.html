@@ -1574,12 +1574,20 @@ function exitArena(victory){
   buildings = buildings.filter(b => !b.arenaPart);
   coins = coins.filter(c => c.x < 900000);   // 아레나에 남은 토큰 정리
   boss = null; bossBullets = []; grenades = []; nets = [];
-  p.x = arena.returnX; p.y = arena.returnY;
-  p.vx = 0; p.vy = -250; p.grounded = false; p.attached = false; p.hitCd = 0.8;
+  // 복귀는 항상 진입 지점에서 가장 가까운 건물 지붕 위에 안전 착지
+  let best = null, bd = Infinity;
+  for (const b of buildings){
+    const cx = clamp(arena.returnX, b.x + PW, b.x + b.w - PW);
+    const d = Math.abs(cx - arena.returnX);
+    if (d < bd){ bd = d; best = { x: cx, y: b.top - PH / 2 }; }
+  }
+  if (best){ p.x = best.x; p.y = best.y; p.grounded = true; }
+  else { p.x = arena.returnX; p.y = arena.returnY; p.grounded = false; }
+  p.vx = 0; p.vy = 0; p.attached = false; p.hitCd = 0.8;
   camX = p.x + 120;
   camY = Math.min(p.y - 100, STREET_Y - 0.42 * (H / SCALE));
   arena = null;
-  if (!victory) toast('보스가 도주했다… 다음 게이트에서 설욕하자!');
+  if (!victory) toast('보스가 도주했다… 다음 보스전에서 설욕하자!');
 }
 function updateArena(dt){
   const p = player;
@@ -1733,12 +1741,12 @@ function genAhead(){
         });
       }
     }
-    // 버프 캡슐 아이템
-    if (wrand() < 0.25){
+    // 버프 캡슐 아이템 — 건물 지붕 바로 위 (착지해야 먹을 수 있다)
+    if (wrand() < 0.28){
       const kinds = ['magnet', 'xp', 'shield', 'rush', 'boost'];
       items.push({
         x: b.x + b.w * (0.2 + wrand() * 0.6),
-        y: wrand() < 0.5 ? b.top - rand(180, 380) : 60 + wrand() * 260,
+        y: b.top - 34,
         kind: kinds[Math.floor(wrand() * kinds.length)],
         t: wrand() * 6.28, taken: false, tt: 0,
       });
