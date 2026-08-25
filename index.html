@@ -87,8 +87,8 @@
 
   /* 모바일 좌우 이동 버튼 */
   #move-ctl{
-    position:absolute;right:16px;bottom:max(16px,env(safe-area-inset-bottom));
-    display:none;grid-template-columns:repeat(3, auto);gap:10px;pointer-events:auto;
+    position:absolute;right:14px;bottom:max(14px,env(safe-area-inset-bottom));
+    display:none;grid-template-columns:repeat(3, auto);gap:7px;pointer-events:auto;
   }
   body.touch #hud.on #move-ctl{display:grid}
   #walk-ctl{
@@ -104,11 +104,11 @@
     -webkit-tap-highlight-color:transparent;
   }
   .move-btn.held{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5)}
-  .fire-btn{width:58px;height:58px;border-color:rgba(255,90,78,.55);font-size:22px}
+  .fire-btn{width:44px;height:44px;border-color:rgba(255,90,78,.55);font-size:17px}
   .fire-btn.held{background:rgba(226,54,54,.35);border-color:var(--red-hi)}
   .skill-btn{position:relative}
   .skill-btn .cd{
-    position:absolute;right:5px;bottom:3px;font-size:12px;font-weight:700;
+    position:absolute;right:3px;bottom:1px;font-size:10px;font-weight:700;
     color:var(--gold);text-shadow:0 1px 3px rgba(0,0,0,.85);
   }
   .skill-btn.cool{opacity:.4}
