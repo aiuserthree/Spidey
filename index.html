@@ -133,6 +133,9 @@
   /* 만료 임박(10초 이하): 배지 빨간 깜빡임 */
   .skill-btn .cd.low{color:var(--red-hi);animation:cdblink 1s steps(2,end) infinite}
   @keyframes cdblink{50%{opacity:.25}}
+  /* 🕷 소환 진행 중: 남은 소환 시간을 흰색 펄스로 표시 (골드=캡슐 잔여와 구분) */
+  .skill-btn .cd.run{color:#FFFFFF;font-size:11px;animation:runpulse .8s ease-in-out infinite}
+  @keyframes runpulse{50%{transform:scale(1.28)}}
 
   #tut{
     position:fixed;z-index:15;left:50%;bottom:max(72px,calc(env(safe-area-inset-bottom) + 58px));
@@ -241,7 +244,7 @@
 
   @media (prefers-reduced-motion: reduce){
     .overlay,#tut,#toast{transition:none}
-    #new-best.on,#combo.pulse .cnum,.skill-btn.pop,.skill-btn .cd.low{animation:none}
+    #new-best.on,#combo.pulse .cnum,.skill-btn.pop,.skill-btn .cd.low,.skill-btn .cd.run{animation:none}
   }
 </style>
 
@@ -2413,7 +2416,16 @@ function updateHUD(){
   countView('btn-storm', 'cd-storm', skillT.storm);
   countView('btn-shield', 'cd-shield', skillT.shield);
   countView('btn-wave', 'cd-wave', skillT.wave);
-  countView('btn-buddy', 'cd-buddy', skillT.buddy);
+  // 🕷 소환 중에는 캡슐 잔여 시간 대신 남은 소환 시간을 흰색 펄스 배지로 표시
+  if (buddyT > 0){
+    const bb = $('btn-buddy'), bs = $('cd-buddy');
+    bb.classList.remove('cool'); bb.classList.add('on');
+    bs.textContent = Math.ceil(buddyT);
+    bs.classList.add('run'); bs.classList.remove('low');
+  } else {
+    $('cd-buddy').classList.remove('run');
+    countView('btn-buddy', 'cd-buddy', skillT.buddy);
+  }
   $('lvl').textContent = 'Lv.' + (bossKills + 1);
   let bt = '';
   if (buddyT > 0) bt += '🕷' + Math.ceil(buddyT) + ' ';
@@ -3158,6 +3170,95 @@ function drawRings(){
     ctx.beginPath(); ctx.arc(r.x, r.y, r.r * 0.8, 0, 6.29); ctx.stroke();
   }
 }
+// 귀여운 아기 거미 — 스파이디 마스크 렌즈 눈 + 웹 라인 + 통통한 남색 다리 8개
+function drawBuddySpider(t, i){
+  const ph = i * 2;                                 // 개체별 위상 오프셋 (두 마리 엇박자)
+  const breathe = Math.sin(t * 3 + ph) * 0.4;       // 몸통 숨쉬기 스퀴시
+  const cyc = (t * 0.45 + i * 0.5) % 1;             // 눈 깜빡임 주기
+  const blink = cyc > 0.9 ? Math.sin((cyc - 0.9) / 0.1 * Math.PI) : 0;
+  const eyeK = 1 - 0.88 * blink;                    // 눈 세로 스케일 (깜빡임)
+  const EC = -2;                                    // 눈 중심 높이
+  const ey = y => EC + (y - EC) * eyeK;             // 깜빡임용 y 좌표 스케일러
+
+  // 다리 8개 (남색·통통, 몸통 뒤에 먼저) — 진남색 외곽 + 남색 본체 2패스
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  function leg(s, k){
+    const ay = -3 + k * 3;                                                // 몸통 부착 높이
+    const wig = Math.sin(t * 5 + ph + k * 1.4 + (s > 0 ? 0 : 2.2)) * 1.3; // 꼼지락 흔들림
+    ctx.beginPath();
+    ctx.moveTo(s * 6.5, ay);
+    ctx.quadraticCurveTo(s * 10.5, ay - 3 + wig * 0.5, s * (11.5 + k * 0.5), ay + 4.5 + wig);
+    ctx.strokeStyle = '#141A33'; ctx.lineWidth = 4.6; ctx.stroke();
+    ctx.strokeStyle = '#2B4FC7'; ctx.lineWidth = 2.8; ctx.stroke();
+  }
+  for (let k = 0; k < 4; k++){ leg(-1, k); leg(1, k); }
+
+  // 몸통 (동글동글 빨간 마스크 헤드)
+  ctx.beginPath();
+  ctx.ellipse(0, 1, 10.5, 9.5 + breathe, 0, 0, 6.29);
+  ctx.fillStyle = '#E23636'; ctx.fill();
+  ctx.strokeStyle = '#141A33'; ctx.lineWidth = 1.6; ctx.stroke();
+
+  // 정수리 하이라이트
+  ctx.beginPath();
+  ctx.ellipse(-3.8, -4.6, 3.1, 2.0, -0.5, 0, 6.29);
+  ctx.fillStyle = '#FF5A4E'; ctx.fill();
+
+  // 마스크 웹 라인 힌트
+  ctx.strokeStyle = '#C92F2F'; ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(0, -8.0); ctx.lineTo(0, 9.6);
+  ctx.moveTo(0, -8.0); ctx.quadraticCurveTo(-5, -2, -6.5, 7);
+  ctx.moveTo(0, -8.0); ctx.quadraticCurveTo(5, -2, 6.5, 7);
+  ctx.moveTo(-8.3, -1.5); ctx.quadraticCurveTo(0, 1.5, 8.3, -1.5);
+  ctx.moveTo(-6.8, 4.2); ctx.quadraticCurveTo(0, 7.2, 6.8, 4.2);
+  ctx.stroke();
+
+  // 볼 홍조 (렌즈보다 먼저 → 겹침 방지)
+  ctx.fillStyle = '#FF5A4E';
+  ctx.beginPath(); ctx.ellipse(-7.4, 3.6, 1.6, 1.0, 0.3, 0, 6.29); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(7.4, 3.6, 1.6, 1.0, -0.3, 0, 6.29); ctx.fill();
+
+  // 스파이디 렌즈 (각진 흰 눈 + 진남색 테두리)
+  function lens(s){
+    ctx.beginPath();
+    ctx.moveTo(s * 1.6, ey(2.0));
+    ctx.quadraticCurveTo(s * 1.1, ey(-2.6), s * 3.4, ey(-5.6));
+    ctx.quadraticCurveTo(s * 6.6, ey(-6.0), s * 7.8, ey(-2.4));
+    ctx.quadraticCurveTo(s * 6.4, ey(2.6), s * 1.6, ey(2.0));
+  }
+  ctx.strokeStyle = '#141A33'; ctx.lineWidth = 1.3; ctx.fillStyle = '#FFFFFF';
+  lens(-1); ctx.fill(); ctx.stroke();
+  lens(1);  ctx.fill(); ctx.stroke();
+
+  // 눈동자 + 반짝 하이라이트 (시선이 좌우로 살짝)
+  const look = Math.sin(t * 0.8 + ph) * 0.5;
+  function pupil(s){
+    const px = s * 4.6 + look, py = ey(-1.6);
+    ctx.beginPath();
+    ctx.ellipse(px, py, 2.3, 2.3 * eyeK, 0, 0, 6.29);
+    ctx.fillStyle = '#141A33'; ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(px - 0.8, py - 0.8 * eyeK, 0.85, 0.85 * eyeK, 0, 0, 6.29);
+    ctx.fillStyle = '#FFFFFF'; ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(px + 0.9, py + 0.7 * eyeK, 0.45, 0.45 * eyeK, 0, 0, 6.29);
+    ctx.fillStyle = '#FFC46B'; ctx.fill();
+  }
+  pupil(-1); pupil(1);
+
+  // 어깨 위 골드 스파클
+  const sp = 0.75 + 0.35 * Math.sin(t * 4 + ph);
+  const sx = -8.2, sy = -8.6;
+  ctx.beginPath();
+  ctx.moveTo(sx, sy - 2 * sp);
+  ctx.quadraticCurveTo(sx + 0.35, sy - 0.35, sx + 2 * sp, sy);
+  ctx.quadraticCurveTo(sx + 0.35, sy + 0.35, sx, sy + 2 * sp);
+  ctx.quadraticCurveTo(sx - 0.35, sy + 0.35, sx - 2 * sp, sy);
+  ctx.quadraticCurveTo(sx - 0.35, sy - 0.35, sx, sy - 2 * sp);
+  ctx.fillStyle = '#FFC46B'; ctx.fill();
+}
 function drawBuddies(){
   if (buddyT <= 0 || player.dead) return;
   const fade = Math.min(1, buddyT / 0.6);
@@ -3167,23 +3268,7 @@ function drawBuddies(){
     ctx.globalAlpha = fade;
     ctx.translate(g.x, g.y);
     ctx.rotate(Math.sin(elapsed * 3 + i * 2) * 0.12);
-    ctx.scale(0.62, 0.62);
-    ctx.lineCap = 'round';
-    // 다리
-    ctx.strokeStyle = '#2B4FC7'; ctx.lineWidth = 7;
-    ctx.beginPath(); ctx.moveTo(-4, 8); ctx.quadraticCurveTo(-10, 18, -14, 15); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(4, 8); ctx.quadraticCurveTo(2, 20, -4, 22); ctx.stroke();
-    // 몸통 + 사격 자세 팔
-    ctx.fillStyle = '#E23636';
-    roundRect(-8, -10, 16, 20, 7); ctx.fill();
-    ctx.strokeStyle = '#C92F2F'; ctx.lineWidth = 6;
-    ctx.beginPath(); ctx.moveTo(5, -6); ctx.lineTo(17, -9); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-5, -6); ctx.lineTo(-10, 4); ctx.stroke();
-    // 머리 + 눈
-    ctx.beginPath(); ctx.fillStyle = '#E23636'; ctx.arc(0, -17, 8, 0, 6.29); ctx.fill();
-    ctx.fillStyle = '#FFFFFF';
-    ctx.beginPath(); ctx.ellipse(-3.6, -17.5, 2.8, 1.9, -0.35, 0, 6.29); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(3.6, -17.5, 2.8, 1.9, 0.35, 0, 6.29); ctx.fill();
+    drawBuddySpider(elapsed, i);
     ctx.restore();
   }
 }
