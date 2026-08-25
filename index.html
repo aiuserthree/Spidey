@@ -284,9 +284,9 @@
         <span class="k desktop-only">Space</span><span class="d desktop-only">지붕에서 점프 · 줄 놓기</span>
         <span class="k touch-only">🕸 버튼</span><span class="d touch-only">가까운 악당 자동 사격 — XP·토큰 드랍!</span>
         <span class="k desktop-only">F · 악당 클릭</span><span class="d desktop-only">거미줄 사격 처치 — XP·토큰 드랍!</span>
-        <span class="k">BOSS 게이트</span><span class="d">포털에 들어가면 실내 보스전 (고블린·베놈·헐크…)</span>
-        <span class="k desktop-only">G·Q·R·T·C</span><span class="d desktop-only">💣🪤⚡🛡💥 — 보스 격파마다 하나씩 해금, 쿨타임 없음!</span>
-        <span class="k touch-only">스킬 6버튼</span><span class="d touch-only">💣🪤⚡🛡💥 — 보스 격파마다 하나씩 해금, 쿨타임 없음!</span>
+        <span class="k">보스전</span><span class="d">100m부터 자동 돌입 — 한 화면 보스룸 (고블린·베놈·헐크…)</span>
+        <span class="k desktop-only">G·Q·R·T·C</span><span class="d desktop-only">💣수류탄 🪤그물 ⚡웹스톰 🛡실드 💥충격파 — 쿨타임 없음!</span>
+        <span class="k touch-only">스킬 6버튼</span><span class="d touch-only">💣수류탄 🪤그물 ⚡웹스톰 🛡실드 💥충격파 — 쿨타임 없음!</span>
         <span class="k">캡슐 아이템</span><span class="d">🧲자석 ⭐XP2배 🛡실드 💰토큰러시 🚀부스트</span>
         <span class="k">스타일</span><span class="d">니어미스·에어타임·격추로 콤보 XP!</span>
         <span class="k">목표</span><span class="d">바닥에 떨어지지 말고 최대한 멀리!</span>
@@ -558,20 +558,10 @@ let bossKills = 0;
 let grenades = [];    // {x, y, vx, vy, fuse}
 let nets = [];        // {x, y, vx, vy, life, target, rot}
 let gCd = 0, nCd = 0;
-let gates = [];       // {x, y, used}
-let nextGateM = 100;
+let nextBossAtM = 100, bossWarned = false;
 let arena = null;     // {baseX, floorY, leftX, rightX, returnX, returnY, timer, clearT}
 let arenaCount = 0;
 let stormCd = 0, shieldCd = 0, waveCd = 0;
-// 보스 격파 보상으로 하나씩 해금 (1 = 🕸 사격만)
-let unlockedSkills = 1;
-const SKILL_ORDER = [
-  { name: '💣 거미줄 수류탄' },
-  { name: '🪤 웹 그물' },
-  { name: '⚡ 웹 스톰' },
-  { name: '🛡 웹 실드' },
-  { name: '💥 충격파' },
-];
 let items = [];       // {x, y, kind, t, taken, tt}
 let rings = [];       // {x, y, r, maxR, t}
 const buffs = { magnetT: 0, xpT: 0, shieldT: 0, boostT: 0 };
@@ -1044,7 +1034,7 @@ function spawnArenaBoss(def){
   const grounded = BOSS_GROUND.has(def.kind);
   boss = {
     kind: def.kind, name: def.name,
-    x: arena.baseX + 500,
+    x: arena.baseX + Math.min(420, arena.halfW - 180),
     y: grounded ? arena.floorY - BOSS_BODY[def.kind].hh : 160,
     vx: 0, vy: 0, hp, maxHp: hp,
     t: 0, state: 'fly', atkCd: 2.0, flashT: 0, hitFlash: 0, ramCd: 0, stunT: 0,
@@ -1102,19 +1092,20 @@ function bossShootAimed(b, sp, oy){
   sfx.bossShot();
 }
 function bossAct(b, dt){
-  // 종류별 이동·공격 패턴
+  // 종류별 이동·공격 패턴 (이동 반경은 룸 폭에 맞춤)
   const p = player;
   const ctr = arena ? arena.baseX : p.x + 340;
+  const ampX = arena ? Math.max(130, arena.halfW - 320) : 480;
   b.atkCd = Math.max(0, b.atkCd - dt);
   b.dir = p.x >= b.x ? 1 : -1;
   switch (b.kind){
     case 'heli': {
-      accelToward(b, ctr + Math.sin(b.t * 0.7) * 480, 170 + Math.sin(b.t * 1.15) * 80, dt, 940, 700);
+      accelToward(b, ctr + Math.sin(b.t * 0.7) * ampX, 170 + Math.sin(b.t * 1.15) * 80, dt, 940, 700);
       if (b.atkCd <= 0){ b.atkCd = Math.max(1.1, 2.0 - bossKills * 0.15); bossShootAimed(b, 760, 32); }
       break;
     }
     case 'goblin': {
-      accelToward(b, ctr + Math.sin(b.t * 0.9) * 520, 170 + Math.sin(b.t * 1.8) * 105, dt, 1050, 820);
+      accelToward(b, ctr + Math.sin(b.t * 0.9) * ampX, 170 + Math.sin(b.t * 1.8) * 105, dt, 1050, 820);
       if (b.atkCd <= 0){
         b.atkCd = 2.4; b.flashT = 0.1;
         bossBullets.push({ x: b.x, y: b.y + 10, vx: clamp((p.x - b.x) * 0.8, -520, 520), vy: -420, life: 4, kind: 'pumpkin' });
@@ -1139,7 +1130,7 @@ function bossAct(b, dt){
         bossContactHit(b, 80, 1.1);
         if (b.phaseT <= 0 || (arena && b.y > arena.floorY - 130)){ b.phase = ''; }
       } else {
-        accelToward(b, ctr + Math.sin(b.t * 0.8) * 560, 150 + Math.sin(b.t * 1.3) * 70, dt, 920, 720);
+        accelToward(b, ctr + Math.sin(b.t * 0.8) * ampX, 150 + Math.sin(b.t * 1.3) * 70, dt, 920, 720);
         if (b.atkCd <= 0){ b.phase = 'telegraph'; b.phaseT = 0.55; b.atkCd = 4.0; }
       }
       break;
@@ -1233,16 +1224,7 @@ function damageBoss(n, hx, hy){
     bumpCombo(); bumpCombo();
     shake = Math.max(shake, 14);
     sfx.boom();
-    // 격파 보상: 새 스킬 해금 (모두 해금 후엔 보너스 XP)
-    if (unlockedSkills < 6){
-      unlockedSkills++;
-      const sd = SKILL_ORDER[unlockedSkills - 2];
-      toast('🎉 새 스킬 해금: ' + sd.name + '!');
-      floaters.push({ x: boss.x, y: boss.y - 150, t: 0, text: '스킬 해금!', color: '140,220,255' });
-      sfx.best();
-    } else {
-      addXP(300, '마스터 보너스!', boss.x, boss.y - 150, 'g');
-    }
+    addXP(300, '격파 보너스!', boss.x, boss.y - 150, 'g');
     for (let i = 0; i < 8; i++){
       const a = i / 8 * 6.28;
       coins.push({ x: boss.x + Math.cos(a) * 95, y: boss.y + Math.sin(a) * 60, t: Math.random() * 6.28, taken: false, tt: 0 });
@@ -1303,6 +1285,7 @@ function updateBoss(dt){
     s.x += s.vx * dt; s.y += s.vy * dt;
     const floor = arena ? arena.floorY : STREET_Y;
     let gone = s.life <= 0 || s.y > floor + 60;
+    if (arena && (s.x < arena.leftX - 80 || s.x > arena.rightX + 80)) gone = true;
     let boomAt = null;
     if (!gone && s.kind !== 'shock'){
       for (const bd of buildings){
@@ -1357,7 +1340,6 @@ function updateBoss(dt){
 // ---------- 스킬: 거미줄 수류탄 · 웹 그물 ----------
 function throwGrenade(){
   if (!playing()) return;
-  if (unlockedSkills < 2){ sfx.release(); return; }
   const p = player;
   const dir = p.vx >= -60 ? 1 : -1;
   let vx = dir * 620 + p.vx * 0.4, vy = -680;
@@ -1391,7 +1373,6 @@ function explodeGrenade(g){
 }
 function throwNet(){
   if (!playing()) return;
-  if (unlockedSkills < 3){ sfx.release(); return; }
   let target = (boss && boss.state === 'fly') ? boss : null;
   if (!target){
     let bd = 1200 * 1200;
@@ -1413,7 +1394,6 @@ function throwNet(){
 function webStorm(){
   // ⚡ 웹 스톰: 부채꼴로 유도탄 8발 일제 발사
   if (!playing()) return;
-  if (unlockedSkills < 4){ sfx.release(); return; }
   const targets = [];
   if (boss && boss.state === 'fly') targets.push(boss);
   for (const t of thugs){
@@ -1434,7 +1414,6 @@ function webStorm(){
 function webShield(){
   // 🛡 웹 실드: 5초 무적 돔
   if (!playing()) return;
-  if (unlockedSkills < 5){ sfx.release(); return; }
   player.hitCd = Math.max(player.hitCd, 5);
   buffs.shieldT = Math.max(buffs.shieldT, 5);
   webPuff(player.x, player.y);
@@ -1443,7 +1422,6 @@ function webShield(){
 function shockwave(){
   // 💥 충격파: 광역 격추 + 보스 3딜 + 보스탄 소거
   if (!playing()) return;
-  if (unlockedSkills < 6){ sfx.release(); return; }
   const p = player;
   rings.push({ x: p.x, y: p.y, r: 24, maxR: 340, t: 0 });
   for (const t of thugs){
@@ -1563,25 +1541,32 @@ function updateSkills(dt){
 }
 
 // ---------- 보스 아레나 ----------
-function enterArena(g){
-  g.used = true;
+function enterArena(){
   const p = player;
   const def = BOSS_KINDS[arenaCount % BOSS_KINDS.length];
   arenaCount++;
   const baseX = 1000000 + arenaCount * 20000;
-  const floorY = 720, half = 880;
+  const floorY = 720;
+  // 한 화면에 딱 맞는 룸: 기기 가시 폭에 맞춰 크기 결정 (스크롤 없음)
+  const half = clamp((W / SCALE) / 2 - 70, 300, 760);
   const floorB = { x: baseX - half - 220, w: (half + 220) * 2, top: floorY, seed: 977, arenaPart: true };
   const wallL = { x: baseX - half - 220, w: 110, top: 150, seed: 978, arenaPart: true };
   const wallR = { x: baseX + half + 110, w: 110, top: 150, seed: 979, arenaPart: true };
   buildings.push(floorB, wallL, wallR);
-  arena = { baseX, floorY, leftX: baseX - half + 40, rightX: baseX + half - 40, returnX: g.x, returnY: g.y - 60, timer: 60, clearT: 0 };
-  p.x = baseX - half + 220; p.y = floorY - PH / 2;
-  p.vx = 0; p.vy = 0; p.grounded = true; p.attached = false; p.diving = false; p.hitCd = 0.6;
-  camX = p.x + 120;
-  camY = Math.min(p.y - 100, STREET_Y - 0.42 * (H / SCALE));
+  arena = {
+    baseX, floorY, halfW: half,
+    leftX: baseX - half + 40, rightX: baseX + half - 40,
+    returnX: p.x, returnY: Math.min(p.y, 560),
+    timer: 60, clearT: 0,
+  };
+  p.x = baseX - half + 160; p.y = floorY - PH / 2;
+  p.vx = 0; p.vy = 0; p.grounded = true; p.attached = false; p.diving = false; p.hitCd = 1.0;
+  activePointer = null; pointerDown = false;
+  touchCtl.active = false; touchCtl.steerX = 0; touchCtl.steerY = 0;
+  camX = baseX; camY = 290;   // 카메라 룸 중앙 고정
   bossBullets = []; webShots = []; grenades = []; nets = [];
   spawnArenaBoss(def);
-  toast('🚪 보스 아레나: ' + def.name + ' — 격파하면 새 스킬 해금!');
+  toast('🚪 보스전 돌입: ' + def.name + ' — 격파 보상을 챙겨라!');
   sfx.alarm();
 }
 function exitArena(victory){
@@ -1600,12 +1585,16 @@ function updateArena(dt){
   const p = player;
   if (!arena){
     if (p.dead) return;
-    for (const g of gates){
-      if (g.used) continue;
-      if (Math.abs(p.x - g.x) < 46 && Math.abs(p.y - (g.y - 34)) < 64){
-        enterArena(g);
-        return;
-      }
+    // 거리 도달 시 자동 보스전 돌입 (25m 전 경고)
+    if (!bossWarned && distM >= nextBossAtM - 25){
+      bossWarned = true;
+      toast('⚠️ ' + nextBossAtM + 'm 지점에서 보스전 돌입!');
+      sfx.alarm();
+    }
+    if (distM >= nextBossAtM){
+      nextBossAtM += 180;
+      bossWarned = false;
+      enterArena();
     }
     return;
   }
@@ -1658,9 +1647,8 @@ function resetWorld(){
   webShots = []; shotCd = 0;
   boss = null; bossBullets = []; bossKills = 0;
   grenades = []; nets = []; gCd = 0; nCd = 0;
-  gates = []; nextGateM = 100; arena = null; arenaCount = 0;
+  nextBossAtM = 100; bossWarned = false; arena = null; arenaCount = 0;
   stormCd = 0; shieldCd = 0; waveCd = 0;
-  unlockedSkills = 1;
   items = []; rings = [];
   buffs.magnetT = 0; buffs.xpT = 0; buffs.shieldT = 0; buffs.boostT = 0;
   buildings.push({ x: -260, w: 520, top: 620, seed: 7 });
@@ -1744,11 +1732,6 @@ function genAhead(){
           state: 'idle', x: 0, vx: 0, vy: 0, rot: 0, dir: wrand() < 0.5 ? -1 : 1,
         });
       }
-    }
-    // 보스 아레나 게이트 (지붕 중앙의 포털)
-    if (b.w > 220 && b.x / DIST_PER_M > nextGateM){
-      gates.push({ x: b.x + b.w / 2, y: b.top, used: false });
-      nextGateM += 180;
     }
     // 버프 캡슐 아이템
     if (wrand() < 0.25){
@@ -2179,21 +2162,11 @@ function updateFX(dt){
 
 // ---------- HUD ----------
 let hudDirty = 0;
-function lockView(btnId, spanId, need){
-  const btn = $(btnId), span = $(spanId);
-  if (unlockedSkills < need){ btn.classList.add('cool'); span.textContent = '🔒'; }
-  else { btn.classList.remove('cool'); span.textContent = ''; }
-}
 function updateHUD(){
   scoreEl.textContent = score;
   distEl.textContent = distM + 'm';
   coinsEl.textContent = '🕸 ' + coinCount;
   kosEl.textContent = '격추 ' + koCount;
-  lockView('btn-nade', 'cd-nade', 2);
-  lockView('btn-net', 'cd-net', 3);
-  lockView('btn-storm', 'cd-storm', 4);
-  lockView('btn-shield', 'cd-shield', 5);
-  lockView('btn-wave', 'cd-wave', 6);
   let bt = '';
   if (buffs.magnetT > 0) bt += '🧲' + Math.ceil(buffs.magnetT) + ' ';
   if (buffs.xpT > 0) bt += '⭐' + Math.ceil(buffs.xpT) + ' ';
@@ -2977,44 +2950,6 @@ function drawNets(){
     ctx.restore();
   }
 }
-function drawGate(g){
-  const pulse = 0.6 + 0.4 * Math.sin(elapsed * 3 + g.x * 0.01);
-  ctx.save();
-  ctx.translate(g.x, g.y);
-  if (!g.used){
-    const glow = ctx.createRadialGradient(0, -34, 6, 0, -34, 85);
-    glow.addColorStop(0, 'rgba(255,90,78,' + (0.35 * pulse) + ')');
-    glow.addColorStop(1, 'rgba(255,90,78,0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(-85, -119, 170, 125);
-  }
-  // 문틀 + 내부 포털
-  ctx.fillStyle = g.used ? '#2A3155' : '#3A2B66';
-  roundRect(-30, -72, 60, 72, 10); ctx.fill();
-  ctx.fillStyle = g.used ? '#1A2040' : '#12081F';
-  roundRect(-23, -64, 46, 64, 8); ctx.fill();
-  if (!g.used){
-    // 소용돌이 웹
-    ctx.strokeStyle = 'rgba(255,196,107,' + (0.45 + 0.4 * pulse) + ')';
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    for (let r0 = 6; r0 <= 20; r0 += 7) ctx.arc(0, -33, r0, 0, 6.29);
-    ctx.stroke();
-    ctx.beginPath();
-    for (let a = 0; a < 6; a++){
-      const aa = a * 1.047 + elapsed * 0.8;
-      ctx.moveTo(0, -33);
-      ctx.lineTo(Math.cos(aa) * 21, -33 + Math.sin(aa) * 24);
-    }
-    ctx.stroke();
-    ctx.font = '700 15px "IBM Plex Sans KR", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,90,78,' + (0.7 + 0.3 * pulse) + ')';
-    ctx.fillText('BOSS', 0, -86 + Math.sin(elapsed * 2.5) * 3);
-  }
-  ctx.restore();
-}
-
 function drawWebShots(){
   for (const s of webShots){
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
@@ -3131,7 +3066,7 @@ function drawArenaRoom(){
   ctx.fillStyle = 'rgba(255,196,107,0.12)';
   ctx.fillRect(x0, -42, x1 - x0, 4);
   // 매달린 조명 + 광원뿔
-  for (let lx = a.baseX - 660; lx <= a.baseX + 660; lx += 440){
+  for (let lx = a.baseX - a.halfW * 0.62; lx <= a.baseX + a.halfW * 0.62 + 1; lx += Math.max(280, a.halfW * 0.62)){
     ctx.strokeStyle = '#3A3160';
     ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(lx, -38); ctx.lineTo(lx, 12); ctx.stroke();
@@ -3181,10 +3116,6 @@ function render(){
     ctx.beginPath(); ctx.arc(t.x, t.y, 8 * a, 0, 6.29); ctx.fill();
   }
 
-  for (const g of gates){
-    if (g.x < viewL - 130 || g.x > viewR + 130) continue;
-    drawGate(g);
-  }
   for (const c of coins){
     if (c.x < viewL || c.x > viewR) continue;
     drawCoin(c);
@@ -3271,6 +3202,12 @@ function render(){
 
 // ---------- 카메라 ----------
 function updateCamera(dt){
+  if (arena){
+    // 보스룸: 카메라 룸 중앙 고정 — 화면 스크롤 없음
+    camX = lerp(camX, arena.baseX, Math.min(1, dt * 8));
+    camY = lerp(camY, 290, Math.min(1, dt * 8));
+    return;
+  }
   const lead = clamp(player.vx * 0.2, -60, 220);
   const tx = player.x + lead + 120;
   const ty = Math.min(player.y - 100, STREET_Y - 0.42 * (H / SCALE));
