@@ -286,8 +286,8 @@
         <span class="k touch-only">🕸 버튼</span><span class="d touch-only">가까운 악당 자동 사격 — XP·토큰 드랍!</span>
         <span class="k desktop-only">F · 악당 클릭</span><span class="d desktop-only">거미줄 사격 처치 — XP·토큰 드랍!</span>
         <span class="k">보스전</span><span class="d">100m부터 자동 돌입 — 한 화면 보스룸 (고블린·베놈·헐크…)</span>
-        <span class="k desktop-only">G·Q·R·T·C·V</span><span class="d desktop-only">💣🪤⚡🛡💥🕷 — 캡슐 한 번 먹으면 무한 사용! (🕷=분신 난사)</span>
-        <span class="k touch-only">스킬 버튼</span><span class="d touch-only">💣🪤⚡🛡💥🕷 — 캡슐 한 번 먹으면 무한 사용! (🕷=분신 난사)</span>
+        <span class="k desktop-only">G·Q·R·T·C·V</span><span class="d desktop-only">💣🪤⚡🛡💥🕷 — 캡슐 먹으면 3분간 무한! 만료 후 재획득</span>
+        <span class="k touch-only">스킬 버튼</span><span class="d touch-only">💣🪤⚡🛡💥🕷 — 캡슐 먹으면 3분간 무한! 만료 후 재획득</span>
         <span class="k">지붕 캡슐</span><span class="d">스킬 해금 캡슐 · 🧲자석 ⭐XP2배 💰토큰러시 🚀부스트 (착지해서 획득)</span>
         <span class="k">스타일</span><span class="d">니어미스·에어타임·격추로 콤보 XP!</span>
         <span class="k">목표</span><span class="d">바닥에 떨어지지 말고 최대한 멀리!</span>
@@ -563,8 +563,9 @@ let nextBossAtM = 100, bossWarned = false;
 let arena = null;     // {baseX, floorY, leftX, rightX, returnX, returnY, timer, clearT}
 let arenaCount = 0;
 let stormCd = 0, shieldCd = 0, waveCd = 0;
-// 특수 스킬 보유 여부 — 시작 잠김, 캡슐 한 번 먹으면 무한 사용
-const skillCount = { nade: 0, net: 0, storm: 0, shield: 0, wave: 0, buddy: 0 };
+// 특수 스킬 남은 시간(초) — 캡슐을 먹으면 180초(3분)간 무한 사용, 만료 시 다시 잠김
+const SKILL_DURATION = 180;
+const skillT = { nade: 0, net: 0, storm: 0, shield: 0, wave: 0, buddy: 0 };
 // 🕷 보조 스파이디 (분신 2마리, 지속시간 동안 자동 난사)
 let buddyT = 0;
 const buddyGuns = [
@@ -1240,12 +1241,9 @@ function damageBoss(n, hx, hy){
     shake = Math.max(shake, 14);
     sfx.boom();
     addXP(300, '격파 보너스!', boss.x, boss.y - 150, 'g');
-    toast('🔥 난이도 상승 — Lv.' + (bossKills + 1) + '!');
-    // 보스 보급: 아직 잠긴 스킬 전부 해금
-    if (Object.keys(skillCount).some(k => skillCount[k] <= 0)){
-      for (const k in skillCount) skillCount[k] = Math.max(skillCount[k], 1);
-      toast('🎁 보스 보급 — 모든 스킬 해금!');
-    }
+    // 보스 보급: 모든 스킬 3분 충전 + 난이도 상승
+    for (const k in skillT) skillT[k] = Math.max(skillT[k], SKILL_DURATION);
+    toast('🔥 Lv.' + (bossKills + 1) + ' 돌입 — 🎁 모든 스킬 3분 충전!');
     for (let i = 0; i < 8; i++){
       const a = i / 8 * 6.28;
       coins.push({ x: boss.x + Math.cos(a) * 95, y: boss.y + Math.sin(a) * 60, t: Math.random() * 6.28, taken: false, tt: 0 });
@@ -1361,7 +1359,7 @@ function updateBoss(dt){
 // ---------- 스킬: 거미줄 수류탄 · 웹 그물 ----------
 function throwGrenade(){
   if (!playing()) return;
-  if (skillCount.nade <= 0){ sfx.release(); return; }
+  if (skillT.nade <= 0){ sfx.release(); return; }
   const p = player;
   const dir = p.vx >= -60 ? 1 : -1;
   let vx = dir * 620 + p.vx * 0.4, vy = -680;
@@ -1395,7 +1393,7 @@ function explodeGrenade(g){
 }
 function throwNet(){
   if (!playing()) return;
-  if (skillCount.net <= 0){ sfx.release(); return; }
+  if (skillT.net <= 0){ sfx.release(); return; }
   let target = (boss && boss.state === 'fly') ? boss : null;
   if (!target){
     let bd = 1200 * 1200;
@@ -1417,7 +1415,7 @@ function throwNet(){
 function webStorm(){
   // ⚡ 웹 스톰: 부채꼴로 유도탄 8발 일제 발사
   if (!playing()) return;
-  if (skillCount.storm <= 0){ sfx.release(); return; }
+  if (skillT.storm <= 0){ sfx.release(); return; }
   const targets = [];
   if (boss && boss.state === 'fly') targets.push(boss);
   for (const t of thugs){
@@ -1438,7 +1436,7 @@ function webStorm(){
 function webShield(){
   // 🛡 웹 실드: 5초 무적 돔
   if (!playing()) return;
-  if (skillCount.shield <= 0){ sfx.release(); return; }
+  if (skillT.shield <= 0){ sfx.release(); return; }
   player.hitCd = Math.max(player.hitCd, 5);
   buffs.shieldT = Math.max(buffs.shieldT, 5);
   webPuff(player.x, player.y);
@@ -1447,7 +1445,7 @@ function webShield(){
 function shockwave(){
   // 💥 충격파: 광역 격추 + 보스 3딜 + 보스탄 소거
   if (!playing()) return;
-  if (skillCount.wave <= 0){ sfx.release(); return; }
+  if (skillT.wave <= 0){ sfx.release(); return; }
   const p = player;
   rings.push({ x: p.x, y: p.y, r: 24, maxR: 340, t: 0 });
   for (const t of thugs){
@@ -1476,15 +1474,17 @@ const ITEM_INFO = {
 const SKILL_NAME = { nade: '💣 수류탄', net: '🪤 웹 그물', storm: '⚡ 웹 스톰', shield: '🛡 웹 실드', wave: '💥 충격파', buddy: '🕷 보조 스파이디' };
 function applyItem(it){
   const p = player;
-  // 스킬 캡슐: 한 번 먹으면 해당 스킬 무한 해금
-  if (skillCount[it.kind] !== undefined){
-    if (skillCount[it.kind] <= 0){
-      skillCount[it.kind] = 1;
-      toast('🎉 ' + SKILL_NAME[it.kind] + ' 해금 — 무한 사용!');
+  // 스킬 캡슐: 3분간 해당 스킬 무한 사용 (재획득 시 3분 재충전)
+  if (skillT[it.kind] !== undefined){
+    const fresh = skillT[it.kind] <= 0;
+    skillT[it.kind] = SKILL_DURATION;
+    if (fresh){
+      toast('🎉 ' + SKILL_NAME[it.kind] + ' — 3분간 무한 사용!');
       addXP(50, '스킬 해금!', it.x, it.y - 26, 'w');
       sfx.best();
     } else {
-      addXP(100, '보너스!', it.x, it.y - 26, 'g');
+      toast('🔄 ' + SKILL_NAME[it.kind] + ' — 3분 재충전!');
+      addXP(50, '재충전!', it.x, it.y - 26, 'g');
       sfx.item();
     }
     bumpCombo();
@@ -1520,7 +1520,7 @@ function applyItem(it){
 function summonBuddies(){
   // 🕷 보조 스파이디: 분신 2마리가 12초간 자동 난사
   if (!playing()) return;
-  if (skillCount.buddy <= 0){ sfx.release(); return; }
+  if (skillT.buddy <= 0){ sfx.release(); return; }
   const fresh = buddyT <= 0;
   buddyT = 12;
   for (const g of buddyGuns){
@@ -1577,6 +1577,13 @@ function updateBuddies(dt){
 }
 function updateSkills(dt){
   updateBuddies(dt);
+  // 스킬 시간제: 만료되면 다시 잠김
+  for (const k in skillT){
+    if (skillT[k] > 0){
+      skillT[k] = Math.max(0, skillT[k] - dt);
+      if (skillT[k] === 0) toast('⌛ ' + SKILL_NAME[k] + ' 만료 — 캡슐을 다시 찾아라!');
+    }
+  }
   gCd = Math.max(0, gCd - dt);
   nCd = Math.max(0, nCd - dt);
   stormCd = Math.max(0, stormCd - dt);
@@ -1756,7 +1763,7 @@ function resetWorld(){
   grenades = []; nets = []; gCd = 0; nCd = 0;
   nextBossAtM = 100; bossWarned = false; arena = null; arenaCount = 0;
   stormCd = 0; shieldCd = 0; waveCd = 0;
-  skillCount.nade = skillCount.net = skillCount.storm = skillCount.shield = skillCount.wave = skillCount.buddy = 0;
+  skillT.nade = skillT.net = skillT.storm = skillT.shield = skillT.wave = skillT.buddy = 0;
   buddyT = 0;
   items = []; rings = [];
   buffs.magnetT = 0; buffs.xpT = 0; buffs.shieldT = 0; buffs.boostT = 0;
@@ -2284,22 +2291,22 @@ function updateFX(dt){
 
 // ---------- HUD ----------
 let hudDirty = 0;
-function countView(btnId, spanId, n){
+function countView(btnId, spanId, t){
   const btn = $(btnId), span = $(spanId);
-  if (n <= 0){ btn.classList.add('cool'); span.textContent = '🔒'; }
-  else { btn.classList.remove('cool'); span.textContent = ''; }
+  if (t <= 0){ btn.classList.add('cool'); span.textContent = '🔒'; }
+  else { btn.classList.remove('cool'); span.textContent = Math.ceil(t); }
 }
 function updateHUD(){
   scoreEl.textContent = score;
   distEl.textContent = distM + 'm';
   coinsEl.textContent = '🕸 ' + coinCount;
   kosEl.textContent = '격추 ' + koCount;
-  countView('btn-nade', 'cd-nade', skillCount.nade);
-  countView('btn-net', 'cd-net', skillCount.net);
-  countView('btn-storm', 'cd-storm', skillCount.storm);
-  countView('btn-shield', 'cd-shield', skillCount.shield);
-  countView('btn-wave', 'cd-wave', skillCount.wave);
-  countView('btn-buddy', 'cd-buddy', skillCount.buddy);
+  countView('btn-nade', 'cd-nade', skillT.nade);
+  countView('btn-net', 'cd-net', skillT.net);
+  countView('btn-storm', 'cd-storm', skillT.storm);
+  countView('btn-shield', 'cd-shield', skillT.shield);
+  countView('btn-wave', 'cd-wave', skillT.wave);
+  countView('btn-buddy', 'cd-buddy', skillT.buddy);
   $('lvl').textContent = 'Lv.' + (bossKills + 1);
   let bt = '';
   if (buddyT > 0) bt += '🕷' + Math.ceil(buddyT) + ' ';
