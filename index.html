@@ -285,9 +285,9 @@
         <span class="k touch-only">🕸 버튼</span><span class="d touch-only">가까운 악당 자동 사격 — XP·토큰 드랍!</span>
         <span class="k desktop-only">F · 악당 클릭</span><span class="d desktop-only">거미줄 사격 처치 — XP·토큰 드랍!</span>
         <span class="k">보스전</span><span class="d">100m부터 자동 돌입 — 한 화면 보스룸 (고블린·베놈·헐크…)</span>
-        <span class="k desktop-only">G·Q·R·T·C</span><span class="d desktop-only">💣🪤⚡🛡💥 — 캡슐로 모아서 1개씩 소모 (🕸 사격은 무한)</span>
-        <span class="k touch-only">스킬 6버튼</span><span class="d touch-only">💣🪤⚡🛡💥 — 캡슐로 모아서 1개씩 소모 (🕸 사격은 무한)</span>
-        <span class="k">지붕 캡슐</span><span class="d">스킬 +1 캡슐 · 🧲자석 ⭐XP2배 💰토큰러시 🚀부스트 (착지해서 획득)</span>
+        <span class="k desktop-only">G·Q·R·T·C</span><span class="d desktop-only">💣🪤⚡🛡💥 — 캡슐 한 번 먹으면 무한 사용! (처음엔 잠김)</span>
+        <span class="k touch-only">스킬 6버튼</span><span class="d touch-only">💣🪤⚡🛡💥 — 캡슐 한 번 먹으면 무한 사용! (처음엔 잠김)</span>
+        <span class="k">지붕 캡슐</span><span class="d">스킬 해금 캡슐 · 🧲자석 ⭐XP2배 💰토큰러시 🚀부스트 (착지해서 획득)</span>
         <span class="k">스타일</span><span class="d">니어미스·에어타임·격추로 콤보 XP!</span>
         <span class="k">목표</span><span class="d">바닥에 떨어지지 말고 최대한 멀리!</span>
       </div>
@@ -562,7 +562,7 @@ let nextBossAtM = 100, bossWarned = false;
 let arena = null;     // {baseX, floorY, leftX, rightX, returnX, returnY, timer, clearT}
 let arenaCount = 0;
 let stormCd = 0, shieldCd = 0, waveCd = 0;
-// 특수 스킬 보유 개수 — 시작 0, 스킬 캡슐로 +1, 사용 시 1 소모
+// 특수 스킬 보유 여부 — 시작 잠김, 캡슐 한 번 먹으면 무한 사용
 const skillCount = { nade: 0, net: 0, storm: 0, shield: 0, wave: 0 };
 let items = [];       // {x, y, kind, t, taken, tt}
 let rings = [];       // {x, y, r, maxR, t}
@@ -1227,9 +1227,11 @@ function damageBoss(n, hx, hy){
     shake = Math.max(shake, 14);
     sfx.boom();
     addXP(300, '격파 보너스!', boss.x, boss.y - 150, 'g');
-    // 보스 보급: 모든 스킬 +1
-    skillCount.nade++; skillCount.net++; skillCount.storm++; skillCount.shield++; skillCount.wave++;
-    toast('🎁 보스 보급 — 모든 스킬 +1!');
+    // 보스 보급: 아직 잠긴 스킬 전부 해금
+    if (Object.keys(skillCount).some(k => skillCount[k] <= 0)){
+      for (const k in skillCount) skillCount[k] = Math.max(skillCount[k], 1);
+      toast('🎁 보스 보급 — 모든 스킬 해금!');
+    }
     for (let i = 0; i < 8; i++){
       const a = i / 8 * 6.28;
       coins.push({ x: boss.x + Math.cos(a) * 95, y: boss.y + Math.sin(a) * 60, t: Math.random() * 6.28, taken: false, tt: 0 });
@@ -1346,7 +1348,6 @@ function updateBoss(dt){
 function throwGrenade(){
   if (!playing()) return;
   if (skillCount.nade <= 0){ sfx.release(); return; }
-  skillCount.nade--;
   const p = player;
   const dir = p.vx >= -60 ? 1 : -1;
   let vx = dir * 620 + p.vx * 0.4, vy = -680;
@@ -1393,7 +1394,6 @@ function throwNet(){
     }
   }
   if (!target){ sfx.release(); return; }
-  skillCount.net--;
   const tp = targetPos(target);
   const dx = tp.x - player.x, dy = tp.y - (player.y - 10);
   const d = Math.hypot(dx, dy) || 1;
@@ -1413,7 +1413,6 @@ function webStorm(){
     if (dx * dx + dy * dy < 1500 * 1500) targets.push(t);
   }
   if (!targets.length){ sfx.release(); return; }
-  skillCount.storm--;
   for (let i = 0; i < 8; i++){
     const tg = targets[i % targets.length];
     const a = -Math.PI / 2 + (i - 3.5) * 0.35;
@@ -1426,7 +1425,6 @@ function webShield(){
   // 🛡 웹 실드: 5초 무적 돔
   if (!playing()) return;
   if (skillCount.shield <= 0){ sfx.release(); return; }
-  skillCount.shield--;
   player.hitCd = Math.max(player.hitCd, 5);
   buffs.shieldT = Math.max(buffs.shieldT, 5);
   webPuff(player.x, player.y);
@@ -1436,7 +1434,6 @@ function shockwave(){
   // 💥 충격파: 광역 격추 + 보스 3딜 + 보스탄 소거
   if (!playing()) return;
   if (skillCount.wave <= 0){ sfx.release(); return; }
-  skillCount.wave--;
   const p = player;
   rings.push({ x: p.x, y: p.y, r: 24, maxR: 340, t: 0 });
   for (const t of thugs){
@@ -1465,14 +1462,19 @@ const ITEM_INFO = {
 const SKILL_NAME = { nade: '💣 수류탄', net: '🪤 웹 그물', storm: '⚡ 웹 스톰', shield: '🛡 웹 실드', wave: '💥 충격파' };
 function applyItem(it){
   const p = player;
-  // 스킬 캡슐: 보유 개수 +1
+  // 스킬 캡슐: 한 번 먹으면 해당 스킬 무한 해금
   if (skillCount[it.kind] !== undefined){
-    skillCount[it.kind]++;
-    toast(SKILL_NAME[it.kind] + ' +1 — 보유 ' + skillCount[it.kind] + '개');
-    addXP(30, '스킬 캡슐!', it.x, it.y - 26, 'w');
+    if (skillCount[it.kind] <= 0){
+      skillCount[it.kind] = 1;
+      toast('🎉 ' + SKILL_NAME[it.kind] + ' 해금 — 무한 사용!');
+      addXP(50, '스킬 해금!', it.x, it.y - 26, 'w');
+      sfx.best();
+    } else {
+      addXP(100, '보너스!', it.x, it.y - 26, 'g');
+      sfx.item();
+    }
     bumpCombo();
     coinBurst(it.x, it.y);
-    sfx.item();
     return;
   }
   switch (it.kind){
@@ -2209,8 +2211,8 @@ function updateFX(dt){
 let hudDirty = 0;
 function countView(btnId, spanId, n){
   const btn = $(btnId), span = $(spanId);
-  if (n <= 0){ btn.classList.add('cool'); span.textContent = '0'; }
-  else { btn.classList.remove('cool'); span.textContent = '×' + n; }
+  if (n <= 0){ btn.classList.add('cool'); span.textContent = '🔒'; }
+  else { btn.classList.remove('cool'); span.textContent = ''; }
 }
 function updateHUD(){
   scoreEl.textContent = score;
