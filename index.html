@@ -41,6 +41,7 @@
   }
   #substat{font-size:12.5px;color:var(--ink-dim);font-variant-numeric:tabular-nums;margin-top:3px}
   #substat b{color:var(--gold);font-weight:700}
+  #buffs{margin-top:4px;font-size:12.5px;font-weight:700;color:var(--gold);letter-spacing:.04em}
   .hud-right{
     position:absolute;top:max(16px,env(safe-area-inset-top));right:20px;
     display:flex;align-items:flex-start;gap:12px;pointer-events:auto;
@@ -86,9 +87,9 @@
   /* 모바일 좌우 이동 버튼 */
   #move-ctl{
     position:absolute;left:16px;bottom:max(16px,env(safe-area-inset-bottom));
-    display:none;gap:14px;pointer-events:auto;
+    display:none;grid-template-columns:repeat(3, auto);gap:10px;pointer-events:auto;
   }
-  body.touch #hud.on #move-ctl{display:flex}
+  body.touch #hud.on #move-ctl{display:grid}
   .move-btn{
     width:60px;height:60px;border-radius:50%;
     border:1px solid var(--line);background:var(--panel);color:var(--ink);
@@ -97,7 +98,7 @@
     -webkit-tap-highlight-color:transparent;
   }
   .move-btn.held{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5)}
-  .fire-btn{width:62px;height:62px;border-color:rgba(255,90,78,.55);font-size:24px}
+  .fire-btn{width:58px;height:58px;border-color:rgba(255,90,78,.55);font-size:22px}
   .fire-btn.held{background:rgba(226,54,54,.35);border-color:var(--red-hi)}
   .skill-btn{position:relative}
   .skill-btn .cd{
@@ -225,6 +226,7 @@
       <span class="hud-label">XP</span>
       <div id="score">0</div>
       <div id="substat"><span id="dist">0m</span> · <b id="coins">🕸 0</b> · <span id="kos">격추 0</span></div>
+      <div id="buffs"></div>
     </div>
     <div id="combo">
       <div class="cnum">콤보 <em id="combo-n">×2</em></div>
@@ -238,6 +240,9 @@
       <button class="move-btn fire-btn skill-btn" id="btn-fire" tabindex="-1" aria-label="거미줄 사격">🕸</button>
       <button class="move-btn fire-btn skill-btn" id="btn-nade" tabindex="-1" aria-label="거미줄 수류탄">💣<span class="cd" id="cd-nade"></span></button>
       <button class="move-btn fire-btn skill-btn" id="btn-net" tabindex="-1" aria-label="웹 그물">🪤<span class="cd" id="cd-net"></span></button>
+      <button class="move-btn fire-btn skill-btn" id="btn-storm" tabindex="-1" aria-label="웹 스톰">⚡<span class="cd" id="cd-storm"></span></button>
+      <button class="move-btn fire-btn skill-btn" id="btn-shield" tabindex="-1" aria-label="웹 실드">🛡<span class="cd" id="cd-shield"></span></button>
+      <button class="move-btn fire-btn skill-btn" id="btn-wave" tabindex="-1" aria-label="충격파">💥<span class="cd" id="cd-wave"></span></button>
     </div>
     <div id="keys-hint">
       <span><kbd>클릭 유지</kbd>거미줄</span>
@@ -268,9 +273,10 @@
         <span class="k desktop-only">Space</span><span class="d desktop-only">지붕에서 점프 · 줄 놓기</span>
         <span class="k touch-only">🕸 버튼</span><span class="d touch-only">가까운 악당 자동 사격 — XP·토큰 드랍!</span>
         <span class="k desktop-only">F · 악당 클릭</span><span class="d desktop-only">거미줄 사격 처치 — XP·토큰 드랍!</span>
-        <span class="k">BOSS 게이트</span><span class="d">지붕 위 포털에 들어가면 악당 보스전 (고블린·베놈·헐크…)</span>
-        <span class="k desktop-only">G / Q</span><span class="d desktop-only">💣 거미줄 수류탄 · 🪤 웹 그물(보스 3초 속박)</span>
-        <span class="k touch-only">💣 · 🪤 버튼</span><span class="d touch-only">수류탄 광역 폭발 · 웹 그물(보스 3초 속박)</span>
+        <span class="k">BOSS 게이트</span><span class="d">포털에 들어가면 실내 보스전 (고블린·베놈·헐크…)</span>
+        <span class="k desktop-only">G·Q·R·T·C</span><span class="d desktop-only">💣수류탄 🪤그물 ⚡웹스톰 🛡실드 💥충격파</span>
+        <span class="k touch-only">스킬 6버튼</span><span class="d touch-only">💣수류탄 🪤그물 ⚡웹스톰 🛡실드 💥충격파</span>
+        <span class="k">캡슐 아이템</span><span class="d">🧲자석 ⭐XP2배 🛡실드 ⏱쿨초기화 🚀부스트</span>
         <span class="k">스타일</span><span class="d">니어미스·에어타임·격추로 콤보 XP!</span>
         <span class="k">목표</span><span class="d">바닥에 떨어지지 말고 최대한 멀리!</span>
       </div>
@@ -457,6 +463,9 @@ const sfx = {
   bossHit(){ noiseBurst(0.08, 0.18, 500); tone(120, 0.12, 'square', 0.12, 70); },
   boom(){ noiseBurst(0.5, 0.3, 200); tone(160, 0.6, 'sawtooth', 0.16, 40); },
   toss(){ tone(500, 0.12, 'sine', 0.1, 280); },
+  storm(){ [0, 60, 120, 180].forEach((d, i) => setTimeout(() => { noiseBurst(0.05, 0.12, 2600); tone(700 + i * 120, 0.08, 'sine', 0.07, 1500); }, d)); },
+  shield(){ tone(520, 0.2, 'triangle', 0.12, 780); setTimeout(() => tone(780, 0.25, 'triangle', 0.1, 1040), 140); },
+  item(){ tone(880, 0.1, 'triangle', 0.12); setTimeout(() => tone(1320, 0.15, 'triangle', 0.11), 80); },
   death(){ tone(380, 0.55, 'sawtooth', 0.16, 60); noiseBurst(0.4, 0.2, 300); },
   best(){ [880, 1109, 1319, 1760].forEach((f, i) => setTimeout(() => tone(f, 0.16, 'triangle', 0.12), i * 90)); },
 };
@@ -524,9 +533,13 @@ let grenades = [];    // {x, y, vx, vy, fuse}
 let nets = [];        // {x, y, vx, vy, life, target, rot}
 let gCd = 0, nCd = 0;
 let gates = [];       // {x, y, used}
-let nextGateM = 200;
+let nextGateM = 100;
 let arena = null;     // {baseX, floorY, leftX, rightX, returnX, returnY, timer, clearT}
 let arenaCount = 0;
+let stormCd = 0, shieldCd = 0, waveCd = 0;
+let items = [];       // {x, y, kind, t, taken, tt}
+let rings = [];       // {x, y, r, maxR, t}
+const buffs = { magnetT: 0, xpT: 0, shieldT: 0, boostT: 0 };
 let particles = [];
 let floaters = [];    // {x, y, t, text, color}
 let trail = [];
@@ -668,10 +681,14 @@ function bindSkillBtn(id, fn){
 }
 bindSkillBtn('btn-nade', throwGrenade);
 bindSkillBtn('btn-net', throwNet);
+bindSkillBtn('btn-storm', webStorm);
+bindSkillBtn('btn-shield', webShield);
+bindSkillBtn('btn-wave', shockwave);
 
 // 물리 키(e.code) 기반 매핑 — 한글 IME 상태에서도 W/A/S/D가 동작한다
 const CODE2KEY = {
-  KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyE: 'e', KeyF: 'f', KeyG: 'g', KeyQ: 'q', KeyP: 'p', KeyM: 'm', KeyR: 'r',
+  KeyW: 'w', KeyA: 'a', KeyS: 's', KeyD: 'd', KeyE: 'e', KeyF: 'f', KeyG: 'g', KeyQ: 'q',
+  KeyP: 'p', KeyM: 'm', KeyR: 'r', KeyT: 't', KeyC: 'c',
   Space: ' ', Enter: 'enter', Escape: 'escape',
   ArrowLeft: 'arrowleft', ArrowRight: 'arrowright', ArrowUp: 'arrowup', ArrowDown: 'arrowdown',
 };
@@ -696,6 +713,9 @@ window.addEventListener('keydown', e => {
     if (k === 'f') fireAtNearest();
     if (k === 'g') throwGrenade();
     if (k === 'q') throwNet();
+    if (k === 'r') webStorm();
+    if (k === 't') webShield();
+    if (k === 'c') shockwave();
   }
 });
 window.addEventListener('keyup', e => { keys[normKey(e)] = false; });
@@ -1273,7 +1293,7 @@ function updateBoss(dt){
 // ---------- 스킬: 거미줄 수류탄 · 웹 그물 ----------
 function throwGrenade(){
   if (!playing() || gCd > 0) return;
-  gCd = 5;
+  gCd = 3;
   const p = player;
   const dir = p.vx >= -60 ? 1 : -1;
   let vx = dir * 620 + p.vx * 0.4, vy = -680;
@@ -1319,16 +1339,104 @@ function throwNet(){
     }
   }
   if (!target){ sfx.release(); return; }
-  nCd = 8;
+  nCd = 5;
   const tp = targetPos(target);
   const dx = tp.x - player.x, dy = tp.y - (player.y - 10);
   const d = Math.hypot(dx, dy) || 1;
   nets.push({ x: player.x, y: player.y - 10, vx: dx / d * 1150, vy: dy / d * 1150, life: 1.6, target, rot: 0 });
   sfx.shoot();
 }
+function webStorm(){
+  // ⚡ 웹 스톰: 부채꼴로 유도탄 8발 일제 발사
+  if (!playing() || stormCd > 0) return;
+  const targets = [];
+  if (boss && boss.state === 'fly') targets.push(boss);
+  for (const t of thugs){
+    if (t.state !== 'idle') continue;
+    const tp = thugPos(t);
+    const dx = tp.x - player.x, dy = tp.y - player.y;
+    if (dx * dx + dy * dy < 1500 * 1500) targets.push(t);
+  }
+  if (!targets.length){ sfx.release(); return; }
+  stormCd = 6;
+  for (let i = 0; i < 8; i++){
+    const tg = targets[i % targets.length];
+    const a = -Math.PI / 2 + (i - 3.5) * 0.35;
+    webShots.push({ x: player.x, y: player.y - 10, vx: Math.cos(a) * 1400, vy: Math.sin(a) * 1400, life: 2.2, target: tg });
+  }
+  shake = Math.max(shake, 4);
+  sfx.storm();
+}
+function webShield(){
+  // 🛡 웹 실드: 5초 무적 돔
+  if (!playing() || shieldCd > 0) return;
+  shieldCd = 10;
+  player.hitCd = Math.max(player.hitCd, 5);
+  buffs.shieldT = Math.max(buffs.shieldT, 5);
+  webPuff(player.x, player.y);
+  sfx.shield();
+}
+function shockwave(){
+  // 💥 충격파: 광역 격추 + 보스 3딜 + 보스탄 소거
+  if (!playing() || waveCd > 0) return;
+  waveCd = 8;
+  const p = player;
+  rings.push({ x: p.x, y: p.y, r: 24, maxR: 340, t: 0 });
+  for (const t of thugs){
+    if (t.state !== 'idle') continue;
+    const tp = thugPos(t);
+    const dx = tp.x - p.x, dy = tp.y - p.y;
+    if (dx * dx + dy * dy < 320 * 320) koThug(t, dx >= 0 ? 400 : -400, '충격파!');
+  }
+  if (boss && boss.state === 'fly'){
+    const dx = boss.x - p.x, dy = boss.y - p.y;
+    if (dx * dx + dy * dy < 340 * 340) damageBoss(3, p.x, p.y);
+  }
+  bossBullets = bossBullets.filter(s => {
+    const dx = s.x - p.x, dy = s.y - p.y;
+    return dx * dx + dy * dy > 360 * 360;
+  });
+  shake = Math.max(shake, 10);
+  sfx.boom();
+}
+const ITEM_INFO = {
+  magnet: { icon: '🧲', msg: '🧲 자석! 12초간 토큰을 빨아들인다' },
+  xp:     { icon: '⭐', msg: '⭐ XP 2배 — 12초!' },
+  shield: { icon: '🛡️', msg: '🛡 실드 — 8초 무적!' },
+  cdreset:{ icon: '⏱️', msg: '⏱ 스킬 쿨타임 전체 초기화!' },
+  boost:  { icon: '🚀', msg: '🚀 부스트!' },
+};
+function applyItem(it){
+  const p = player;
+  switch (it.kind){
+    case 'magnet': buffs.magnetT = 12; break;
+    case 'xp': buffs.xpT = 12; break;
+    case 'shield': buffs.shieldT = Math.max(buffs.shieldT, 8); p.hitCd = Math.max(p.hitCd, 8); break;
+    case 'cdreset': gCd = nCd = stormCd = shieldCd = waveCd = shotCd = 0; break;
+    case 'boost': {
+      const dir = p.vx >= -60 ? 1 : -1;
+      p.vx += dir * 500;
+      p.vy = Math.min(p.vy, -250);
+      buffs.boostT = 6;
+      break;
+    }
+  }
+  addXP(50, '아이템!', it.x, it.y - 26, 'g');
+  bumpCombo();
+  coinBurst(it.x, it.y);
+  sfx.item();
+  toast(ITEM_INFO[it.kind].msg);
+}
 function updateSkills(dt){
   gCd = Math.max(0, gCd - dt);
   nCd = Math.max(0, nCd - dt);
+  stormCd = Math.max(0, stormCd - dt);
+  shieldCd = Math.max(0, shieldCd - dt);
+  waveCd = Math.max(0, waveCd - dt);
+  buffs.magnetT = Math.max(0, buffs.magnetT - dt);
+  buffs.xpT = Math.max(0, buffs.xpT - dt);
+  buffs.shieldT = Math.max(0, buffs.shieldT - dt);
+  buffs.boostT = Math.max(0, buffs.boostT - dt);
   // 수류탄
   for (let i = grenades.length - 1; i >= 0; i--){
     const g = grenades[i];
@@ -1447,7 +1555,7 @@ function updateArena(dt){
 // ---------- XP / 콤보 ----------
 function comboMult(){ return 1 + Math.min(combo, 20) * 0.1; }
 function addXP(base, label, x, y, kind){
-  const gained = Math.round(base * comboMult());
+  const gained = Math.round(base * comboMult() * (buffs.xpT > 0 ? 2 : 1));
   score += gained;
   const color = kind === 'g' ? '255,196,107' : kind === 'r' ? '255,90,78' : '255,255,255';
   floaters.push({ x, y, t: 0, text: '+' + gained + ' ' + label, color });
@@ -1478,7 +1586,10 @@ function resetWorld(){
   webShots = []; shotCd = 0;
   boss = null; bossBullets = []; bossKills = 0;
   grenades = []; nets = []; gCd = 0; nCd = 0;
-  gates = []; nextGateM = 200; arena = null; arenaCount = 0;
+  gates = []; nextGateM = 100; arena = null; arenaCount = 0;
+  stormCd = 0; shieldCd = 0; waveCd = 0;
+  items = []; rings = [];
+  buffs.magnetT = 0; buffs.xpT = 0; buffs.shieldT = 0; buffs.boostT = 0;
   buildings.push({ x: -260, w: 520, top: 620, seed: 7 });
   genX = 260;
   const p = player;
@@ -1564,7 +1675,17 @@ function genAhead(){
     // 보스 아레나 게이트 (지붕 중앙의 포털)
     if (b.w > 220 && b.x / DIST_PER_M > nextGateM){
       gates.push({ x: b.x + b.w / 2, y: b.top, used: false });
-      nextGateM += 400;
+      nextGateM += 180;
+    }
+    // 버프 캡슐 아이템
+    if (wrand() < 0.25){
+      const kinds = ['magnet', 'xp', 'shield', 'cdreset', 'boost'];
+      items.push({
+        x: b.x + b.w * (0.2 + wrand() * 0.6),
+        y: wrand() < 0.5 ? b.top - rand(180, 380) : 60 + wrand() * 260,
+        kind: kinds[Math.floor(wrand() * kinds.length)],
+        t: wrand() * 6.28, taken: false, tt: 0,
+      });
     }
     genX = b.x + b.w;
   }
@@ -1733,7 +1854,8 @@ function physics(dt){
   }
 
   const sp0 = Math.hypot(p.vx, p.vy);
-  if (sp0 > MAX_SPEED){ p.vx *= MAX_SPEED / sp0; p.vy *= MAX_SPEED / sp0; }
+  const spCap = MAX_SPEED + (buffs.boostT > 0 ? 320 : 0);
+  if (sp0 > spCap){ p.vx *= spCap / sp0; p.vy *= spCap / sp0; }
 
   const prevBottom = p.y + PH / 2;
   p.x += p.vx * dt;
@@ -1825,16 +1947,19 @@ function physics(dt){
   while (diffR < -Math.PI) diffR += Math.PI * 2;
   p.rot += diffR * Math.min(1, dt * 10);
 
-  // 토큰 (자석: 가까우면 빨려온다)
+  // 토큰 (자석: 가까우면 빨려온다 — 🧲 버프 중엔 광역 흡수)
+  const magR = buffs.magnetT > 0 ? 540 : 140;
+  const magPull = buffs.magnetT > 0 ? 1500 : 640;
+  const magSkip = buffs.magnetT > 0 ? 620 : 260;
   for (let i = 0; i < coins.length; i++){
     const c = coins[i];
     if (c.taken) continue;
-    if (c.x < p.x - 260 || c.x > p.x + 260) continue;   // 멀리 있는 토큰 스킵
+    if (c.x < p.x - magSkip || c.x > p.x + magSkip) continue;
     const dx = c.x - p.x, dy = c.y - p.y;
     const d2 = dx * dx + dy * dy;
-    if (d2 < 140 * 140 && d2 >= PICK_R * PICK_R){
+    if (d2 < magR * magR && d2 >= PICK_R * PICK_R){
       const d = Math.sqrt(d2) || 1;
-      const pull = 640 * dt;
+      const pull = magPull * dt;
       c.x -= dx / d * pull; c.y -= dy / d * pull;
     }
     if (dx * dx + dy * dy < PICK_R * PICK_R){
@@ -1844,6 +1969,18 @@ function physics(dt){
       bumpCombo();
       sfx.coin();
       coinBurst(c.x, c.y);
+    }
+  }
+
+  // 버프 캡슐 아이템 픽업
+  for (let i = 0; i < items.length; i++){
+    const it = items[i];
+    if (it.taken) continue;
+    if (it.x < p.x - 260 || it.x > p.x + 260) continue;
+    const dx = it.x - p.x, dy = it.y - p.y;
+    if (dx * dx + dy * dy < 62 * 62){
+      it.taken = true; it.tt = 0;
+      applyItem(it);
     }
   }
 
@@ -1940,6 +2077,20 @@ function updateFX(dt){
       if (c.tt > 0.5) coins.splice(i, 1);
     }
   }
+  for (let i = items.length - 1; i >= 0; i--){
+    const it = items[i];
+    it.t += dt;
+    if (it.taken){
+      it.tt += dt;
+      if (it.tt > 0.5) items.splice(i, 1);
+    }
+  }
+  for (let i = rings.length - 1; i >= 0; i--){
+    const r = rings[i];
+    r.t += dt;
+    r.r = lerp(24, r.maxR, Math.min(1, r.t / 0.35));
+    if (r.t > 0.45) rings.splice(i, 1);
+  }
   thugs.forEach(t => { if (t.state === 'idle') t.t += dt * 1.1; });
   shake = Math.max(0, shake - dt * 60);
 
@@ -1964,6 +2115,15 @@ function updateHUD(){
   kosEl.textContent = '격추 ' + koCount;
   cdView('btn-nade', 'cd-nade', gCd);
   cdView('btn-net', 'cd-net', nCd);
+  cdView('btn-storm', 'cd-storm', stormCd);
+  cdView('btn-shield', 'cd-shield', shieldCd);
+  cdView('btn-wave', 'cd-wave', waveCd);
+  let bt = '';
+  if (buffs.magnetT > 0) bt += '🧲' + Math.ceil(buffs.magnetT) + ' ';
+  if (buffs.xpT > 0) bt += '⭐' + Math.ceil(buffs.xpT) + ' ';
+  if (buffs.shieldT > 0) bt += '🛡' + Math.ceil(buffs.shieldT) + ' ';
+  if (buffs.boostT > 0) bt += '🚀' + Math.ceil(buffs.boostT);
+  $('buffs').textContent = bt;
 }
 
 // ---------- 렌더 ----------
@@ -2036,6 +2196,19 @@ function drawSkylineLayer(par, colBody, band, hMin, hMax, spacing){
 }
 
 function drawBuilding(b){
+  if (b.arenaPart){
+    // 아레나 실내 구조물: 민무늬 슬래브
+    ctx.fillStyle = '#2A2348';
+    ctx.fillRect(b.x, b.top, b.w, STREET_Y - b.top + 400);
+    ctx.fillStyle = 'rgba(255,196,107,0.25)';
+    ctx.fillRect(b.x, b.top, b.w, 4);
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let px = b.x; px < b.x + b.w; px += 130){ ctx.moveTo(px, b.top + 8); ctx.lineTo(px, b.top + 200); }
+    ctx.stroke();
+    return;
+  }
   const r = mulberry32(b.seed);
   const x = b.x, w = b.w, top = b.top, h = STREET_Y - top + 400;
   if (!b.grad){
@@ -2165,7 +2338,7 @@ function drawThug(t){
 function drawHero(){
   const p = player;
   ctx.save();
-  if (!p.dead && p.hitCd > 0) ctx.globalAlpha = 0.55 + 0.45 * Math.sin(elapsed * 30);
+  if (!p.dead && p.hitCd > 0 && buffs.shieldT <= 0) ctx.globalAlpha = 0.55 + 0.45 * Math.sin(elapsed * 30);
   ctx.translate(p.x, p.y);
   ctx.rotate(p.rot);
   if (p.dead) ctx.rotate(elapsed * 6);
@@ -2648,6 +2821,58 @@ function drawBossBullets(){
     }
   }
 }
+const ITEM_ICON = { magnet: '🧲', xp: '⭐', shield: '🛡️', cdreset: '⏱️', boost: '🚀' };
+function drawItems(viewL, viewR){
+  for (const it of items){
+    if (it.x < viewL || it.x > viewR) continue;
+    const s = it.taken ? Math.max(0, 1 - it.tt * 3) : 1;
+    if (s <= 0) continue;
+    ctx.save();
+    ctx.translate(it.x, it.y + Math.sin(it.t * 0.8) * 7);
+    ctx.scale(s, s);
+    const pulse = 0.5 + 0.5 * Math.sin(it.t * 2.4);
+    ctx.fillStyle = 'rgba(140,220,255,' + (0.1 + pulse * 0.12) + ')';
+    ctx.beginPath(); ctx.arc(0, 0, 32, 0, 6.29); ctx.fill();
+    ctx.fillStyle = 'rgba(18,24,50,0.8)';
+    ctx.beginPath(); ctx.arc(0, 0, 21, 0, 6.29); ctx.fill();
+    ctx.strokeStyle = 'rgba(140,220,255,0.95)';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.arc(0, 0, 21, 0, 6.29); ctx.stroke();
+    ctx.font = '20px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ITEM_ICON[it.kind], 0, 2);
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
+  }
+}
+function drawRings(){
+  for (const r of rings){
+    const a = Math.max(0, 1 - r.t / 0.45);
+    ctx.strokeStyle = 'rgba(255,255,255,' + (a * 0.9) + ')';
+    ctx.lineWidth = 6 * a + 2;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, 6.29); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,196,107,' + (a * 0.5) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r * 0.8, 0, 6.29); ctx.stroke();
+  }
+}
+function drawShieldDome(){
+  if (buffs.shieldT <= 0 || player.dead) return;
+  const p = player;
+  const a = Math.min(1, buffs.shieldT) * (0.5 + 0.25 * Math.sin(elapsed * 6));
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(elapsed * 0.7);
+  ctx.strokeStyle = 'rgba(140,220,255,' + a + ')';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++){ ctx.moveTo(0, 0); ctx.lineTo(Math.cos(i * 1.047) * 52, Math.sin(i * 1.047) * 52); }
+  ctx.arc(0, 0, 52, 0, 6.29);
+  ctx.arc(0, 0, 38, 0, 6.29);
+  ctx.stroke();
+  ctx.restore();
+}
 function drawGrenades(){
   for (const g of grenades){
     const blink = g.fuse < 0.4 && Math.sin(elapsed * 40) > 0;
@@ -2797,12 +3022,64 @@ function drawAimPreview(){
   ctx.restore();
 }
 
+function drawArenaRoomBg(){
+  // 실내(스크린 공간): 어두운 격납고 배경
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0F0C1E');
+  g.addColorStop(0.6, '#1A1630');
+  g.addColorStop(1, '#221C3C');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+}
+function drawArenaRoom(){
+  // 실내(월드 공간): 뒷벽·천장·조명
+  const a = arena;
+  const x0 = a.leftX - 260, x1 = a.rightX + 260;
+  // 뒷벽 패널
+  ctx.fillStyle = '#241E40';
+  ctx.fillRect(x0, -170, x1 - x0, a.floorY + 170);
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  for (let px = x0; px <= x1; px += 170){ ctx.moveTo(px, -170); ctx.lineTo(px, a.floorY); }
+  ctx.moveTo(x0, 140); ctx.lineTo(x1, 140);
+  ctx.moveTo(x0, 460); ctx.lineTo(x1, 460);
+  ctx.stroke();
+  // 배관
+  ctx.strokeStyle = '#171331';
+  ctx.lineWidth = 9;
+  ctx.beginPath(); ctx.moveTo(x0, 60); ctx.lineTo(x1, 60); ctx.stroke();
+  // 천장 슬래브
+  ctx.fillStyle = '#151129';
+  ctx.fillRect(x0, -190, x1 - x0, 152);
+  ctx.fillStyle = 'rgba(255,196,107,0.12)';
+  ctx.fillRect(x0, -42, x1 - x0, 4);
+  // 매달린 조명 + 광원뿔
+  for (let lx = a.baseX - 660; lx <= a.baseX + 660; lx += 440){
+    ctx.strokeStyle = '#3A3160';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(lx, -38); ctx.lineTo(lx, 12); ctx.stroke();
+    const cone = ctx.createLinearGradient(0, 12, 0, a.floorY);
+    cone.addColorStop(0, 'rgba(255,220,150,0.16)');
+    cone.addColorStop(1, 'rgba(255,220,150,0)');
+    ctx.fillStyle = cone;
+    ctx.beginPath();
+    ctx.moveTo(lx, 12); ctx.lineTo(lx - 180, a.floorY); ctx.lineTo(lx + 180, a.floorY);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#FFE6A8';
+    ctx.beginPath(); ctx.arc(lx, 16, 8, 0, 6.29); ctx.fill();
+  }
+}
 function render(){
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 
-  drawSky();
-  drawSkylineLayer(0.12, '#3A3E7E', 1.04, 0.25, 0.55, 150);
-  drawSkylineLayer(0.3, '#2B3266', 1.06, 0.3, 0.68, 190);
+  if (arena){
+    drawArenaRoomBg();
+  } else {
+    drawSky();
+    drawSkylineLayer(0.12, '#3A3E7E', 1.04, 0.25, 0.55, 150);
+    drawSkylineLayer(0.3, '#2B3266', 1.06, 0.3, 0.68, 190);
+  }
 
   const shx = (shake > 0 && !REDUCED_MOTION) ? rand(-shake, shake) : 0;
   const shy = (shake > 0 && !REDUCED_MOTION) ? rand(-shake, shake) : 0;
@@ -2813,6 +3090,8 @@ function render(){
 
   const viewL = camX - (W / SCALE) / 2 - 60;
   const viewR = camX + (W / SCALE) / 2 + 60;
+
+  if (arena) drawArenaRoom();
 
   for (const b of buildings){
     if (b.x + b.w < viewL || b.x > viewR) continue;
@@ -2834,6 +3113,7 @@ function render(){
     if (c.x < viewL || c.x > viewR) continue;
     drawCoin(c);
   }
+  drawItems(viewL, viewR);
   for (const t of thugs){
     const tx = t.state === 'idle' ? t.bx : t.x;
     if (tx < viewL - 60 || tx > viewR + 60) continue;
@@ -2848,9 +3128,11 @@ function render(){
   drawWebShots();
   drawGrenades();
   drawNets();
+  drawRings();
   drawWeb();
   drawSpeedLines();
   if (!(player.dead && deathTimer > 0.35)) drawHero();
+  drawShieldDome();
 
   for (const q of particles){
     const a = q.life / q.maxLife;
