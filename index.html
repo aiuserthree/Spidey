@@ -589,8 +589,8 @@ let stormCd = 0, shieldCd = 0, waveCd = 0;
 // 특수 스킬 남은 시간(초) — 캡슐을 먹으면 180초(3분)간 무한 사용, 만료 시 다시 잠김
 const SKILL_DURATION = 180;
 const skillT = { nade: 0, net: 0, storm: 0, shield: 0, wave: 0, buddy: 0 };
-// 🕷 보조 스파이디 (분신 2마리, 지속시간 동안 자동 난사)
-let buddyT = 0;
+// 🕷 보조 스파이디 (분신 2마리 — 한 번 소환하면 그 판 내내 자동 난사)
+let buddiesActive = false;
 const buddyGuns = [
   { off: [-74, -42], x: 0, y: 0, ft: 0 },
   { off: [72, -58], x: 0, y: 0, ft: 0.2 },
@@ -1626,16 +1626,16 @@ function applyItem(it){
   toast(ITEM_INFO[it.kind].msg);
 }
 function summonBuddies(){
-  // 🕷 보조 스파이디: 분신 2마리가 12초간 자동 난사
+  // 🕷 보조 스파이디: 분신 2마리가 계속 따라다니며 자동 난사
   if (!playing()) return;
   if (skillT.buddy <= 0){ sfx.release(); return; }
-  const fresh = buddyT <= 0;
-  buddyT = 12;
+  if (buddiesActive){ toast('🕷 보조 스파이디가 이미 활동 중!'); return; }
+  buddiesActive = true;
   for (const g of buddyGuns){
-    if (fresh){ g.x = player.x + g.off[0]; g.y = player.y + g.off[1]; }
-    webPuff(player.x + g.off[0], player.y + g.off[1]);
+    g.x = player.x + g.off[0]; g.y = player.y + g.off[1];
+    webPuff(g.x, g.y);
   }
-  toast('🕷 보조 스파이디 소환 — 12초 난사!');
+  toast('🕷 보조 스파이디 소환 — 이제 계속 함께 싸운다!');
   sfx.shield();
 }
 function nearestEnemy(fromX, fromY, range){
@@ -1655,8 +1655,7 @@ function nearestEnemy(fromX, fromY, range){
   return best;
 }
 function updateBuddies(dt){
-  if (buddyT <= 0) return;
-  buddyT = Math.max(0, buddyT - dt);
+  if (!buddiesActive) return;
   const p = player;
   for (let i = 0; i < buddyGuns.length; i++){
     const g = buddyGuns[i];
@@ -1872,7 +1871,7 @@ function resetWorld(){
   nextBossAtM = 100; bossWarned = false; arena = null; arenaCount = 0;
   stormCd = 0; shieldCd = 0; waveCd = 0;
   skillT.nade = skillT.net = skillT.storm = skillT.shield = skillT.wave = skillT.buddy = 0;
-  buddyT = 0;
+  buddiesActive = false;
   items = []; rings = [];
   buffs.magnetT = 0; buffs.xpT = 0; buffs.shieldT = 0; buffs.boostT = 0;
   buildings.push({ x: -260, w: 520, top: 620, seed: 7 });
@@ -2416,19 +2415,18 @@ function updateHUD(){
   countView('btn-storm', 'cd-storm', skillT.storm);
   countView('btn-shield', 'cd-shield', skillT.shield);
   countView('btn-wave', 'cd-wave', skillT.wave);
-  // 🕷 소환 중에는 캡슐 잔여 시간 대신 남은 소환 시간을 흰색 펄스 배지로 표시
-  if (buddyT > 0){
+  // 🕷 소환 중에는 ∞ 표시 (영구 활동), 아니면 캡슐 잔여 시간/잠금
+  if (buddiesActive){
     const bb = $('btn-buddy'), bs = $('cd-buddy');
     bb.classList.remove('cool'); bb.classList.add('on');
-    bs.textContent = Math.ceil(buddyT);
-    bs.classList.add('run'); bs.classList.remove('low');
+    bs.textContent = '∞';
+    bs.classList.remove('low');
   } else {
-    $('cd-buddy').classList.remove('run');
     countView('btn-buddy', 'cd-buddy', skillT.buddy);
   }
   $('lvl').textContent = 'Lv.' + (bossKills + 1);
   let bt = '';
-  if (buddyT > 0) bt += '🕷' + Math.ceil(buddyT) + ' ';
+  if (buddiesActive) bt += '🕷 ';
   if (buffs.magnetT > 0) bt += '🧲' + Math.ceil(buffs.magnetT) + ' ';
   if (buffs.xpT > 0) bt += '⭐' + Math.ceil(buffs.xpT) + ' ';
   if (buffs.shieldT > 0) bt += '🛡' + Math.ceil(buffs.shieldT) + ' ';
@@ -3260,12 +3258,10 @@ function drawBuddySpider(t, i){
   ctx.fillStyle = '#FFC46B'; ctx.fill();
 }
 function drawBuddies(){
-  if (buddyT <= 0 || player.dead) return;
-  const fade = Math.min(1, buddyT / 0.6);
+  if (!buddiesActive || player.dead) return;
   for (let i = 0; i < buddyGuns.length; i++){
     const g = buddyGuns[i];
     ctx.save();
-    ctx.globalAlpha = fade;
     ctx.translate(g.x, g.y);
     ctx.rotate(Math.sin(elapsed * 3 + i * 2) * 0.12);
     ctx.scale(0.7, 0.7);   // 아담해야 귀엽다
